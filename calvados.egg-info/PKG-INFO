@@ -1,0 +1,28 @@
+Metadata-Version: 2.4
+Name: calvados
+Version: 0.8.0
+Summary: Coarse-grained implicit-solvent simulations of biomolecules
+Home-page: https://github.com/KULL-Centre/CALVADOS
+License: GNU GPL3
+Classifier: Intended Audience :: Science/Research
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Programming Language :: Python :: 3.13
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: biopython
+Requires-Dist: Jinja2
+Requires-Dist: tqdm
+Requires-Dist: matplotlib
+Requires-Dist: PyYAML
+Requires-Dist: statsmodels
+Requires-Dist: localcider
+Requires-Dist: pytest
+Requires-Dist: numba
+Requires-Dist: scipy
+Dynamic: classifier
+Dynamic: home-page
+Dynamic: license
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: summary
