@@ -420,11 +420,11 @@ class Sim:
             if comp.molecule_type == 'lipid':
                 for sig, lam, ome in zip(comp.sigmas, comp.lambdas, comp.omegas):
                     self.ah.addParticle([sig*unit.nanometer, lam, 0])
-                    self.isolf.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer])
+                    self.isolf.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer, 1])
             else:
                 for sig, lam, ome in zip(comp.sigmas, comp.lambdas, comp.omegas):
                     self.ah.addParticle([sig*unit.nanometer, lam, 1])
-                    self.isolf.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer])
+                    self.isolf.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer, -1])
 
         # Add Debye-Huckel
         for q in comp.qs:
@@ -703,7 +703,7 @@ class Sim:
                 print(f'Minimizing energy.')
                 simulation.minimizeEnergy()
 
-            masses = np.array([simulation.system.getParticleMass(i).value_in_unit(unit.dalton) for i in range(simulation.system.getNumParticles())]) 
+            masses = np.array([simulation.system.getParticleMass(i).value_in_unit(unit.dalton) for i in range(simulation.system.getNumParticles())])
             simulation.reporters.append(PressureDataReporter(f'{self.path}/{self.sysname}.npy',int(self.pressurefreq),pressure_tensor=self.pressure_tensor,append=append,volume=np.prod(self.box),masses=masses))
 
         simulation.reporters.append(app.dcdreporter.DCDReporter(f'{self.path}/{self.sysname:s}.dcd',self.wfreq,append=append))

@@ -29,7 +29,7 @@ def init_ah_interactions(eps,rc,fixed_lambda):
     # intermolecular interactions
     energy_expression = f'{eps}*select(step(r-2^(1/6)*s),4*l*((s/r)^12-(s/r)^6-shift),4*((s/r)^12-(s/r)^6-l*shift)+(1-l))'
     #ah = openmm.CustomNonbondedForce(energy_expression+f'; s=0.5*(s1+s2); l=0.5*(l1+l2); shift=(0.5*(s1+s2)/{rc})^12-(0.5*(s1+s2)/{rc})^6')
-    ah = openmm.CustomNonbondedForce(energy_expression+f'; l=select(id1+id2,0.5*(l1+l2),{fixed_lambda}); shift=(s/{rc})^12-(s/{rc})^6; s=0.5*(s1+s2)')
+    ah = openmm.CustomNonbondedForce(energy_expression+f'; l=select((id1+id2)*step(id1+id2),0.5*(l1+l2),{fixed_lambda}); shift=(s/{rc})^12-(s/{rc})^6; s=0.5*(s1+s2)')
 
     ah.addPerParticleParameter('s')
     ah.addPerParticleParameter('l')
@@ -197,14 +197,15 @@ def init_cosine_interactions(eps):
 
 def init_isolf_interactions(eps,rc):
     """ Define cosine interaction (iSoLF lipid model, DOI: https://doi.org/10.1063/5.0160417). """
-    isolf_expression = f'{eps}*select(step(r-rmin),l*select(step(o1)*step(o2),step(rmin+o-r)*(3*u^2-2*u^3-1),step(-3-o1-o2)*4*((s/r)^12-(s/r)^6)),4*((s/r)^12-(s/r)^6+1/4)-step(-3-o1-o2)*l-step(o1)*step(o2)*l)'
+    isolf_expression = 'eps*select(step(r-rmin),l*select(step(o1)*step(o2),step(rmin+o-r)*(3*u^2-2*u^3-1),step(-3-o1-o2)*4*((s/r)^12-(s/r)^6)),4*((s/r)^12-(s/r)^6+1/4)-step(-3-o1-o2)*l-step(o1)*step(o2)*l)'
     #isolf_expression = 'e*select(step(r-rmin),l*select(step(o1)*step(o2),step(rmin+o-r)*(3*u^2-2*u^3-1),step(-3-o1-o2)*4*((s/r)^12-(s/r)^6)),4*((s/r)^12-(s/r)^6+1/4)-step(-3-o1-o2)*l)'
     #isolf_expression = 'e*select(step(r-rmin),l*select(step(o1)*step(o2),-step(rmin+o-r)*cos(u)^2,step(-3-o1-o2)*4*((s/r)^12-(s/r)^6)),4*((s/r)^12-(s/r)^6+1/4)-step(-3-o1-o2)*l)'
     #isolf = openmm.CustomNonbondedForce(isolf_expression+f'; e=(1-delta(o1*o2))*{eps}; l=sqrt(l1*l2); u=(r-rmin)/o/2*{np.pi}; rmin=2^(1/6)*s; s=0.5*(s1+s2); o=0.5*(o1+o2)')
-    isolf = openmm.CustomNonbondedForce(isolf_expression+f'; l=sqrt(l1*l2); u=(r-rmin)/o; rmin=2^(1/6)*s; s=0.5*(s1+s2); o=0.5*(o1+o2)')
+    isolf = openmm.CustomNonbondedForce(isolf_expression+f'; eps=step(id1+id2)*{eps}; l=sqrt(l1*l2); u=(r-rmin)/o; rmin=2^(1/6)*s; s=0.5*(s1+s2); o=0.5*(o1+o2)')
     isolf.addPerParticleParameter('s')
     isolf.addPerParticleParameter('l')
     isolf.addPerParticleParameter('o')
+    isolf.addPerParticleParameter('id')
     isolf.setNonbondedMethod(openmm.CustomNonbondedForce.CutoffPeriodic)
     isolf.setCutoffDistance(rc*unit.nanometer)
     isolf.setForceGroup(1)
