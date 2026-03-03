@@ -424,7 +424,7 @@ class Sim:
             else:
                 for sig, lam, ome in zip(comp.sigmas, comp.lambdas, comp.omegas):
                     self.ah.addParticle([sig*unit.nanometer, lam, 1])
-                    self.isolf.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer, -1])
+                    self.isolf.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer, -5])
 
         # Add Debye-Huckel
         for q in comp.qs:
