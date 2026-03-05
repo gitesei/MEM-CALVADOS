@@ -335,7 +335,7 @@ class Sim:
         elif self.topol == 'shift_ref_bead':
             x0 = self.box * 0.5 # place in center of box
             xs = x0 + comp.xinit
-            xs -= comp.xinit[self.ref_bead]
+            xs -= comp.xinit[comp.ref_bead] + comp.pos_bead
         else:
             box = self.box if comp.subvolume is None else np.asarray(comp.subvolume)
             xs = build.random_placement(box, self.pos, comp.xinit, ntries=ntries, random=comp.random)

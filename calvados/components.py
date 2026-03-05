@@ -50,6 +50,8 @@ class Component:
         self.lambdas = np.array([self.residues.loc[s].lambdas for s in self.seq])
         self.bondlengths = np.array([self.residues.loc[s].bondlength for s in self.seq])
         self.mws = np.array([self.residues.loc[s].MW for s in self.seq])
+        if self.fixed_bead:
+            self.mws[self.ref_bead] = 0.
         if self.fcharges is None:
             self.qs, _ = get_qs(self.seq,flexhis=True,pH=pH,residues=self.residues)
         else:

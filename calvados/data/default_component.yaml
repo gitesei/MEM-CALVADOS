@@ -6,6 +6,9 @@ alpha: 0
 ffasta : 'fastabib.fasta'
 kb : 8033.0
 fcharges : null
+ref_bead : 0
+pos_bead : [0,0,0]
+fixed_bead : false
 
 ext_restraint : true
 restraint : false
