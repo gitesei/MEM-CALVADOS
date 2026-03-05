@@ -197,7 +197,7 @@ def init_cosine_interactions(eps):
 
 def init_isolf_interactions(eps,rc):
     """ Define cosine interaction (iSoLF lipid model, DOI: https://doi.org/10.1063/5.0160417). """
-    isolf_expression = 'eps*select(step(r-rmin),l*select(step(o1)*step(o2),step(rmin+o-r)*(3*u^2-2*u^3-1),is_lj*4*((s/r)^12-(s/r)^6)),4*((s/r)^12-(s/r)^6+1/4)-is_lj*l-step(o1)*step(o2)*l)'
+    isolf_expression = 'eps*select(step(r-rmin),l*select(step(o1)*step(o2),step(rmin+o-r)*(3*u^2-2*u^3-1),is_lj*4*((s/r)^12-(s/r)^6)),4*((s/r)^12-(s/r)^6+1/4)-select(step(o1)*step(o2),l,is_lj*l))'
     #isolf_expression = 'e*select(step(r-rmin),l*select(step(o1)*step(o2),step(rmin+o-r)*(3*u^2-2*u^3-1),step(-3-o1-o2)*4*((s/r)^12-(s/r)^6)),4*((s/r)^12-(s/r)^6+1/4)-step(-3-o1-o2)*l)'
     #isolf_expression = 'e*select(step(r-rmin),l*select(step(o1)*step(o2),-step(rmin+o-r)*cos(u)^2,step(-3-o1-o2)*4*((s/r)^12-(s/r)^6)),4*((s/r)^12-(s/r)^6+1/4)-step(-3-o1-o2)*l)'
     #isolf = openmm.CustomNonbondedForce(isolf_expression+f'; e=(1-delta(o1*o2))*{eps}; l=sqrt(l1*l2); u=(r-rmin)/o/2*{np.pi}; rmin=2^(1/6)*s; s=0.5*(s1+s2); o=0.5*(o1+o2)')

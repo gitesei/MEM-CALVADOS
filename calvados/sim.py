@@ -181,8 +181,8 @@ class Sim:
         if self.nlipids > 0:
             self.bilayergrid = build.build_xygrid(int(self.nlipids),self.box)
             if (self.nproteins + self.nrnas) > 0:
-                xyzgrid = build.build_xyzgrid(np.ceil((self.nproteins+self.nrnas)/2.),[self.box[0],self.box[1],self.box[2]/2.-self.box[0]])
-                self.xyzgrid = np.append(xyzgrid, xyzgrid + np.asarray([0,0,self.box[2]/2.+self.box[0]]), axis=0)
+                xyzgrid = build.build_xyzgrid(np.ceil((self.nproteins+self.nrnas)/2.),[self.box[0],self.box[1],self.box[2]/2.-self.slab_outer])
+                self.xyzgrid = np.append(xyzgrid, xyzgrid + np.asarray([0,0,self.box[2]/2.+self.slab_outer]), axis=0)
 
         #if os.path.isfile(f'{self.path}/top.pdb'):
         #    self.pos = md.load_pdb(f'{self.path}/top.pdb').xyz[0]
