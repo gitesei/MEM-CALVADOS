@@ -419,7 +419,7 @@ class Sim:
         else:
             if comp.molecule_type == 'lipid':
                 for sig, lam, ome in zip(comp.sigmas, comp.lambdas, comp.omegas):
-                    self.ah.addParticle([sig*unit.nanometer, lam, 0])
+                    self.ah.addParticle([sig*unit.nanometer, lam, -1])
                     self.isolf.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer, 1])
             else:
                 for sig, lam, ome in zip(comp.sigmas, comp.lambdas, comp.omegas):
