@@ -201,7 +201,7 @@ def init_isolf_interactions(eps,rc):
     #isolf_expression = 'e*select(step(r-rmin),l*select(step(o1)*step(o2),step(rmin+o-r)*(3*u^2-2*u^3-1),step(-3-o1-o2)*4*((s/r)^12-(s/r)^6)),4*((s/r)^12-(s/r)^6+1/4)-step(-3-o1-o2)*l)'
     #isolf_expression = 'e*select(step(r-rmin),l*select(step(o1)*step(o2),-step(rmin+o-r)*cos(u)^2,step(-3-o1-o2)*4*((s/r)^12-(s/r)^6)),4*((s/r)^12-(s/r)^6+1/4)-step(-3-o1-o2)*l)'
     #isolf = openmm.CustomNonbondedForce(isolf_expression+f'; e=(1-delta(o1*o2))*{eps}; l=sqrt(l1*l2); u=(r-rmin)/o/2*{np.pi}; rmin=2^(1/6)*s; s=0.5*(s1+s2); o=0.5*(o1+o2)')
-    isolf = openmm.CustomNonbondedForce(isolf_expression+'is_lj=step(-3-id1*o1-id2*o2); l=sqrt(l1*l2); u=(r-rmin)/o; rmin=2^(1/6)*s; s=0.5*(s1+s2); o=0.5*(o1+o2)')
+    isolf = openmm.CustomNonbondedForce(isolf_expression+'; is_lj=step(-3-id1*o1-id2*o2); l=sqrt(l1*l2); u=(r-rmin)/o; rmin=2^(1/6)*s; s=0.5*(s1+s2); o=0.5*(o1+o2)')
     isolf.addPerParticleParameter('s')
     isolf.addPerParticleParameter('l')
     isolf.addPerParticleParameter('o')
