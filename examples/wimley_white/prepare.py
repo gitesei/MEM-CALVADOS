@@ -21,27 +21,25 @@ eq_apl_dict = {
 
 cwd = os.getcwd()
 N_save = int(5e4)
-N_frames = 1100
+N_frames = 1200
 Lx = 25
 Ly = Lx
-Lz = 60
 area_per_lipid = eq_apl_dict['POPC']
 N_lipids = int(np.ceil(Lx*Ly/area_per_lipid)*2)
-
-residues_file = f'{cwd}/input/residues.csv'
 
 sysname = args.name
 charge_termini = 'None' if sysname[2] in ['R','K'] else 'C'
 
+residues_file = f'{cwd}/input/residues.csv'
+
 config = Config(
   # GENERAL
   sysname = sysname, # name of simulation system
-  box = [Lx, Ly, Lz], # nm
+  box = [Lx, Ly, 60.], # nm
   temp = 297.15,
   ionic = 0.15, # molar
   pH = 7,
-  topol = 'shift_ref_bead',
-  report_potential_energy = True,
+  topol = 'slab',
   slab_outer = 15,
   bilayer_eq = True,
   friction = 0.01,
@@ -49,8 +47,8 @@ config = Config(
   pressure = [0,0,0],
 
   # RUNTIME SETTINGS
+  #gpu_id = args.gpu_id,
   wfreq = N_save, # dcd writing frequency, 1 = 10fs
-  logfreq = N_save//5,
   steps = N_frames*N_save, # number of simulation steps
   steps_eq = 20*N_save,
   runtime = 0, # overwrites 'steps' keyword if > 0
@@ -73,12 +71,12 @@ from calvados.analysis import SlabAnalysis, calc_bilayer_prop
 
 slab = SlabAnalysis(name="{sysname:s}", input_path="{path:s}",
                     output_path="{output_path:s}", ref_name="bilayer", 
-                    ref_chains = (1,{int(N_lipids):d}),
+                    ref_chains = (100,{int(N_lipids+100-1):d}),
                     client_names = ["protein"],
-                    client_chain_list = [(0,0)],
+                    client_chain_list = [(0,99)],
                     verbose=True)
 
-slab.center(start=100, center_target='ref')
+slab.center(start=200, center_target='ref')
 slab.calc_profiles()
 slab.calc_concentrations()
 calc_bilayer_prop(path="{path:s}",sysname="{sysname:s}",output_path="{output_path:s}")
@@ -91,12 +89,12 @@ components = Components(
   molecule_type = 'protein',
   nmol = 1, # number of molecules
   restraint = False, # apply restraints
-  charge_termini = charge_termini, # charge N or C or both
+  charge_termini = 'None', # charge N or C or both
 
   # INPUT
   ffasta = f'{cwd}/input/fastalib.fasta', # input fasta file
   fresidues = residues_file, # residue definitions
 )
 components.add(name='POPC', molecule_type='lipid', nmol=int(N_lipids))
-components.add(name=args.name, molecule_type='protein', nmol=1, ref_bead=2, pos_bead=[0,0,2.5], fixed_bead=True)
+components.add(name=args.name, molecule_type='protein', nmol=100, charge_termini = charge_termini)
 components.write(path,name='components.yaml')
