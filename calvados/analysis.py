@@ -790,6 +790,104 @@ class SlabAnalysis:
 
         return eden, edil
 
+def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},start=None,end=None,step=1,input_pdb='top.pdb'):
+    if not os.path.isfile(f'{path:s}/traj.dcd'):
+        u = mda.Universe(f'{path:s}/{input_pdb:s}',f'{path:s}/{sysname:s}.dcd',in_memory=True)
+        ag = u.select_atoms('all')
+        n_atoms = ag.n_atoms
+        # create list of bonds
+        bonds = []
+        for segment in u.segments:
+            for i in segment.atoms.indices[:-1]:
+                bonds.extend([(i, i+1)])
+        u.add_TopologyAttr('bonds', bonds)
+        with mda.Writer(f'{path:s}/traj.dcd',n_atoms) as W:
+            for t,ts in enumerate(u.trajectory[start:end:step]):
+                # make chains whole
+                ts = transformations.unwrap(ag)(ts)
+                W.write(ag)
+
+    traj = md.load_dcd(f'{path:s}/traj.dcd',top=f'{path:s}/'+input_pdb)
+    traj.xyz -= traj.unitcell_lengths[0,:]/2
+
+    if len(chainid_dict) == 0:
+        chainid_dict[sysname] = (0, traj.top.n_chains-1)
+
+    residues = pd.read_csv(residues_file, index_col='three')
+
+    lx = traj.unitcell_lengths[0,0]
+    ly = traj.unitcell_lengths[0,1]
+    lz = traj.unitcell_lengths[0,2]
+    binwidth = 0.1 # nm
+    volume = lx*ly*binwidth # volume of a slice in nm3
+    conv_to_mM = 10/6.02214/volume*1e3 # conversion to mM
+    edges = np.arange(-lz/2,lz/2+binwidth,binwidth)
+    z = edges[:-1]+binwidth/2.
+
+    chain_prop = {}
+    n_chains = 0
+    for chain_name, chainids in chainid_dict.items():
+        chain_prop[chain_name] = {}
+        if type(chainids) is int:
+            chainids = (chainids, chainids)
+        seq = [res.name for res in traj.top.chain(chainids[0]).residues]
+        mws = residues.loc[seq,'MW'].values
+        mws[0] += 2
+        mws[-1] += 16
+        chain_prop[chain_name]['ids'] = np.arange(chainids[0],chainids[1]+1)
+        n_chains += chain_prop[chain_name]['ids'].size
+        chain_prop[chain_name]['N'] = len(seq)
+        chain_prop[chain_name]['MWs'] = mws
+        chain_prop[chain_name]['z'] = z
+
+    # calculate traj of chain COM
+    for chain_name in chain_prop.keys():
+        hist_com = np.zeros((traj.n_frames,edges.size-1))
+        hist_res = np.zeros((traj.n_frames,edges.size-1))
+        hist_rgs = np.zeros((traj.n_frames,edges.size-1))
+        hist_rees = np.zeros((traj.n_frames,edges.size-1))
+        hist_cos = np.zeros((traj.n_frames,edges.size-1))
+        for chainid in chain_prop[chain_name]['ids']:
+            mws = chain_prop[chain_name]['MWs']
+            t_chain = traj.atom_slice(traj.top.select(f'chainid {chainid:d}'))
+            com = np.sum(t_chain.xyz*mws[np.newaxis,:,np.newaxis],axis=1)/mws.sum()
+            # calculate residue-cm distances
+            si = t_chain.xyz - com[:,np.newaxis,:]
+            # calculate rg
+            q = np.einsum('jim,jin->jmn', si*mws[np.newaxis,:,np.newaxis],si)/mws.sum()
+            trace_q = np.trace(q,axis1=1,axis2=2)
+            # calculate rg
+            rgarray = np.sqrt(trace_q)
+            # calculate traceless matrix
+            mean_trace = np.trace(q,axis1=1,axis2=2)/3
+            q_hat = q - mean_trace.reshape(-1,1,1)*np.identity(3).reshape(-1,3,3)
+            # calculate asphericity
+            Delta_array = 3/2*np.trace(q_hat**2,axis1=1,axis2=2)/(trace_q**2)
+            # calculate oblateness
+            S_array = 27*np.linalg.det(q_hat)/(trace_q**3)
+            ree_vec = t_chain.xyz[:, -1, :] - t_chain.xyz[:, 0, :]
+            reearray = np.linalg.norm(ree_vec, axis=1)
+            cosarray = ree_vec[:,2] / reearray
+            com_z_wrapped = (t_chain.xyz[:, :, 2] + 0.5*lz) % lz - 0.5*lz
+            h = np.apply_along_axis(lambda a: np.histogram(a,bins=edges)[0], 1, com_z_wrapped)
+            hist_com += h
+            z_wrapped = (t_chain.xyz[:, :, 2] + 0.5*lz) % lz - 0.5*lz
+            h = np.apply_along_axis(lambda a: np.histogram(a,bins=edges)[0], 1, z_wrapped)
+            hist_res += np.where(h>0,1,0)
+            hist_rgs += np.where(h>0,1,0)*rgarray[:,np.newaxis]
+            hist_rees += np.where(h>0,1,0)*reearray[:,np.newaxis]
+            hist_cos += np.where(h>0,1,0)*cosarray[:,np.newaxis]
+        chain_prop[chain_name]['com'] = hist_com.mean(axis=0) * conv_to_mM
+        chain_prop[chain_name]['res'] = hist_res.mean(axis=0)
+        chain_prop[chain_name]['rg'] = hist_rgs.mean(axis=0)
+        chain_prop[chain_name]['ree'] = hist_rees.mean(axis=0)
+        chain_prop[chain_name]['cos'] = hist_cos.mean(axis=0)
+
+    keys = ['z','com','res','rg','ree','cos']
+    for chain_name in chain_prop.keys():
+        np.save(output_path+f'/{sysname:s}_{chain_name:s}_conf_profiles.npy',{k: chain_prop[chain_name][k] for k in keys})
+
+
 def calc_com_traj(path,sysname,output_path,residues_file,chainid_dict={},start=None,end=None,step=1,input_pdb='top.pdb'):
     """
     Calculate trajectory of chain COMs and per-frame Rg's for each chain.
@@ -854,7 +952,6 @@ def calc_com_traj(path,sysname,output_path,residues_file,chainid_dict={},start=N
     xyz = np.empty((traj.n_frames,n_chains,3))
     for chain_name in chain_prop.keys():
         for chainid in chain_prop[chain_name]['ids']:
-            chain = traj.top.chain(chainid)
             mws = chain_prop[chain_name]['MWs']
             new_chain = cmtop.add_chain()
             res = cmtop.add_residue('COM', new_chain, resSeq=chainid)
@@ -1001,7 +1098,6 @@ def calc_bilayer_prop(path,sysname,output_path,input_pdb='top.pdb'):
 
     t_pho = traj.atom_slice(traj.top.select('resname J'))
     h_pho = np.apply_along_axis(lambda a: np.histogram(a,bins=edges/10)[0], 1, t_pho.xyz[:,:,2])/area.mean()
-    h_pho_mean = h_pho.mean(axis=0)
 
     d_pho_pho = np.empty(0)
     for h in h_pho:
