@@ -842,11 +842,10 @@ def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},sta
 
     # calculate traj of chain COM
     for chain_name in chain_prop.keys():
-        hist_com = np.zeros((traj.n_frames,edges.size-1))
-        hist_res = np.zeros((traj.n_frames,edges.size-1))
-        hist_rgs = np.zeros((traj.n_frames,edges.size-1))
-        hist_rees = np.zeros((traj.n_frames,edges.size-1))
-        hist_cos = np.zeros((traj.n_frames,edges.size-1))
+        hist_com = np.zeros(edges.size-1)
+        hist_rg = np.zeros(edges.size-1)
+        hist_ree = np.zeros(edges.size-1)
+        hist_cos = np.zeros(edges.size-1)
         for chainid in chain_prop[chain_name]['ids']:
             mws = chain_prop[chain_name]['MWs']
             t_chain = traj.atom_slice(traj.top.select(f'chainid {chainid:d}'))
@@ -857,7 +856,7 @@ def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},sta
             q = np.einsum('jim,jin->jmn', si*mws[np.newaxis,:,np.newaxis],si)/mws.sum()
             trace_q = np.trace(q,axis1=1,axis2=2)
             # calculate rg
-            rgarray = np.sqrt(trace_q)
+            rg_array = np.sqrt(trace_q)
             # calculate traceless matrix
             mean_trace = np.trace(q,axis1=1,axis2=2)/3
             q_hat = q - mean_trace.reshape(-1,1,1)*np.identity(3).reshape(-1,3,3)
@@ -866,27 +865,22 @@ def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},sta
             # calculate oblateness
             S_array = 27*np.linalg.det(q_hat)/(trace_q**3)
             ree_vec = t_chain.xyz[:, -1, :] - t_chain.xyz[:, 0, :]
-            reearray = np.linalg.norm(ree_vec, axis=1)
-            cosarray = ree_vec[:,2] / reearray
-            com_z_wrapped = (t_chain.xyz[:, :, 2] + 0.5*lz) % lz - 0.5*lz
-            h = np.apply_along_axis(lambda a: np.histogram(a,bins=edges)[0], 1, com_z_wrapped)
-            hist_com += h
-            z_wrapped = (t_chain.xyz[:, :, 2] + 0.5*lz) % lz - 0.5*lz
-            h = np.apply_along_axis(lambda a: np.histogram(a,bins=edges)[0], 1, z_wrapped)
-            hist_res += np.where(h>0,1,0)
-            hist_rgs += np.where(h>0,1,0)*rgarray[:,np.newaxis]
-            hist_rees += np.where(h>0,1,0)*reearray[:,np.newaxis]
-            hist_cos += np.where(h>0,1,0)*cosarray[:,np.newaxis]
-        chain_prop[chain_name]['com'] = hist_com.mean(axis=0) * conv_to_mM
-        chain_prop[chain_name]['res'] = hist_res.mean(axis=0)
-        chain_prop[chain_name]['rg'] = hist_rgs.mean(axis=0)
-        chain_prop[chain_name]['ree'] = hist_rees.mean(axis=0)
-        chain_prop[chain_name]['cos'] = hist_cos.mean(axis=0)
+            ree_array = np.linalg.norm(ree_vec, axis=1)
+            evals, evecs = np.linalg.eigh(q)
+            cos_array = np.abs(evecs[:, 2, 2])
+            com_z_wrapped = (com[:, 2] + 0.5*lz) % lz - 0.5*lz
+            hist_com += np.histogram(com_z_wrapped,bins=edges)[0]
+            hist_rg += np.histogram(com_z_wrapped,bins=edges, weights=rg_array)[0]
+            hist_ree += np.histogram(com_z_wrapped,bins=edges, weights=ree_array)[0]
+            hist_cos += np.histogram(com_z_wrapped,bins=edges, weights=cos_array)[0]
+        chain_prop[chain_name]['com'] = hist_com / traj.n_frames * conv_to_mM
+        chain_prop[chain_name]['rg']  = np.divide(hist_rg, hist_com, out=np.full_like(hist_rg, np.nan, dtype=float), where=hist_com > 0)
+        chain_prop[chain_name]['ree'] = np.divide(hist_ree, hist_com, out=np.full_like(hist_ree, np.nan, dtype=float), where=hist_com > 0)
+        chain_prop[chain_name]['cos'] = np.divide(hist_cos, hist_com, out=np.full_like(hist_cos, np.nan, dtype=float), where=hist_com > 0)
 
-    keys = ['z','com','res','rg','ree','cos']
+    keys = ['z','com','rg','ree','cos']
     for chain_name in chain_prop.keys():
         np.save(output_path+f'/{sysname:s}_{chain_name:s}_conf_profiles.npy',{k: chain_prop[chain_name][k] for k in keys})
-
 
 def calc_com_traj(path,sysname,output_path,residues_file,chainid_dict={},start=None,end=None,step=1,input_pdb='top.pdb'):
     """
