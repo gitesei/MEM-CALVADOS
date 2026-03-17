@@ -791,6 +791,24 @@ class SlabAnalysis:
         return eden, edil
 
 def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},start=None,end=None,step=1,input_pdb='top.pdb'):
+    """
+    Calculate profiles as a function of the z-coordinate of the COM.
+
+    Parameters:
+    -----------
+    chainid_dict : dict
+        Examples:
+            {'name_1': 0, 'name_2': 1}
+            {'name_1': (0, 99), 'name_2': (100, 199)}
+        - Keys are component names.
+        - Values are integers or tuples representing the first and last chain IDs.
+
+        The dictionary can contains as many entries as the number of components in the system.
+
+        If the dictionary is not provided as an argument, the function assumes a
+        single-component system named `sysname` and calculates profiles for all the chains in the topology.
+    """
+
     if not os.path.isfile(f'{path:s}/traj.dcd'):
         u = mda.Universe(f'{path:s}/{input_pdb:s}',f'{path:s}/{sysname:s}.dcd',in_memory=True)
         ag = u.select_atoms('all')
@@ -880,7 +898,7 @@ def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},sta
 
     keys = ['z','com','rg','ree','cos']
     for chain_name in chain_prop.keys():
-        np.save(output_path+f'/{sysname:s}_{chain_name:s}_conf_profiles.npy',{k: chain_prop[chain_name][k] for k in keys})
+        np.save(output_path+f'/{sysname:s}_{chain_name:s}_com_profiles.npy',{k: chain_prop[chain_name][k] for k in keys})
 
 def calc_com_traj(path,sysname,output_path,residues_file,chainid_dict={},start=None,end=None,step=1,input_pdb='top.pdb'):
     """

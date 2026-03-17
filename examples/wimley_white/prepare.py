@@ -64,15 +64,13 @@ output_path = 'data'
 subprocess.run(f'mkdir -p {path}',shell=True)
 subprocess.run(f'mkdir -p {output_path}',shell=True)
 
-
-
 analyses = f"""
-from calvados.analysis import SlabAnalysis, calc_bilayer_prop
+from calvados.analysis import SlabAnalysis, calc_bilayer_prop, calc_com_profiles
 
 slab = SlabAnalysis(name="{sysname:s}", input_path="{path:s}",
-                    output_path="{output_path:s}", ref_name="bilayer", 
+                    output_path="{output_path:s}", ref_name="bilayer",
                     ref_chains = (100,{int(N_lipids+100-1):d}),
-                    client_names = ["protein"],
+                    client_names = ["peptides"],
                     client_chain_list = [(0,99)],
                     verbose=True)
 
@@ -80,6 +78,9 @@ slab.center(start=200, center_target='ref')
 slab.calc_profiles()
 slab.calc_concentrations()
 calc_bilayer_prop(path="{path:s}",sysname="{sysname:s}",output_path="{output_path:s}")
+chainid_dict = dict(peptides=(0, 99), bilayer=(100, {int(N_lipids+100-1):d}))
+calc_com_profiles(path="{path:s}",sysname="{sysname:s}",output_path="{output_path:s}",residues_file="{residues_file:s}",
+                  chainid_dict=chainid_dict)
 """
 
 config.write(path,name='config.yaml',analyses=analyses)
