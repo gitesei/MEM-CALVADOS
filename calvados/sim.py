@@ -480,7 +480,7 @@ class Sim:
                         self.top.add_bond(chain.atom(i), chain.atom(j))
         else:
             for idx,resname in enumerate(comp.seq):
-                if comp.molecule_type in ['protein','crowder','lj_fluid']:
+                if comp.molecule_type in ['protein','crowder','lipid','lj_fluid']:
                     resname = comp.residues.loc[resname,'three']
                 res = self.top.add_residue(resname, chain, resSeq=idx+1)
                 self.top.add_atom('CA', element=md.element.carbon, residue=res)
