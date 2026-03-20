@@ -1086,7 +1086,7 @@ def calc_bilayer_prop(path,sysname,output_path,input_pdb='top.pdb'):
 
     # area per lipid
     area = traj.unitcell_lengths[:,0]*traj.unitcell_lengths[:,1]
-    mid_beads = traj.top.select('resname U')
+    mid_beads = traj.top.select('resname MID')
     n_lipids = mid_beads.size
     area_per_lipid = area/n_lipids*2
     np.save(output_path+f'/{sysname:s}_apl.npy',area_per_lipid)
@@ -1108,7 +1108,7 @@ def calc_bilayer_prop(path,sysname,output_path,input_pdb='top.pdb'):
     dz = (edges[1] - edges[0]) / 2.
     z = edges[:-1] + dz
 
-    t_pho = traj.atom_slice(traj.top.select('resname J'))
+    t_pho = traj.atom_slice(traj.top.select('resname PHO'))
     h_pho = np.apply_along_axis(lambda a: np.histogram(a,bins=edges/10)[0], 1, t_pho.xyz[:,:,2])/area.mean()
 
     d_pho_pho = np.empty(0)
@@ -1143,8 +1143,8 @@ def calc_membrane_profiles(
     residues_file,
     tmd_sel,
     start=0,
-    ref_sel="resname X",
-    strip_sel="not (resname O or resname J or resname U or resname X or resname =)",
+    ref_sel="resname TDO or resname TPO",
+    strip_sel="not (resname CHO or resname PHO or resname MID or resname TDO or resname TPO)",
 ):
     df_residues = pd.read_csv(residues_file, index_col=0)
     three_to_one = dict(zip(df_residues["three"].values, df_residues.index.values))

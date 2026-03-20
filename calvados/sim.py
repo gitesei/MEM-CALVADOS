@@ -573,6 +573,7 @@ class Sim:
             print(f'Appending trajectory to {self.path}/{self.sysname:s}.dcd')
             print(f'Appending log file to {self.path}/{self.sysname:s}.log')
             simulation.loadCheckpoint(fcheck_in)
+            self.bilayer_eq = False
         else:
             if self.restart == 'pdb':
                 print(f'Reading in system configuration {self.frestart}')
