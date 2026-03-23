@@ -22,7 +22,7 @@ module load CUDA/12.0.0
 python prepare.py --name {{name}}
 python {{name}}/run.py --path {{name}}""")
 
-peptides = ['WLRLL', 'WLALL', 'WLFLL']
+peptides = ['WLALL', 'WLVLL', 'WLKLL']
 
 for name in peptides:
     if not os.path.isdir(name):
