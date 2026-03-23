@@ -50,6 +50,7 @@ config = Config(
   # RUNTIME SETTINGS
   #gpu_id = args.gpu_id,
   wfreq = N_save, # dcd writing frequency, 1 = 10fs
+  logfreq = N_save,
   steps = N_frames*N_save, # number of simulation steps
   steps_eq = 20*N_save,
   runtime = 0, # overwrites 'steps' keyword if > 0
