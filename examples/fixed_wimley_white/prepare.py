@@ -80,7 +80,7 @@ slab.center(start=200, center_target='ref')
 slab.calc_profiles()
 slab.calc_concentrations()
 calc_bilayer_prop(path="{path:s}",sysname="{sysname:s}",output_path="{output_path:s}")
-chainid_dict = dict(peptides=(0, 0), bilayer=(1, {int(N_lipids):d}))
+chainid_dict = dict(peptides=(0, 0))
 calc_com_profiles(path="{path:s}",sysname="{sysname:s}",output_path="{output_path:s}",residues_file="{residues_file:s}",
                   chainid_dict=chainid_dict)
 """

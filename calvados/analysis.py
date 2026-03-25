@@ -891,6 +891,7 @@ def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},sta
             hist_rg += np.histogram(com_z_wrapped,bins=edges, weights=rg_array)[0]
             hist_ree += np.histogram(com_z_wrapped,bins=edges, weights=ree_array)[0]
             hist_cos += np.histogram(com_z_wrapped,bins=edges, weights=cos_array)[0]
+            np.save(output_path+f'/{sysname:s}_{chain_name:s}_{chainid:d}_com_z.npy',com_z_wrapped)
         chain_prop[chain_name]['com'] = hist_com / traj.n_frames * conv_to_mM
         chain_prop[chain_name]['rg']  = np.divide(hist_rg, hist_com, out=np.full_like(hist_rg, np.nan, dtype=float), where=hist_com > 0)
         chain_prop[chain_name]['ree'] = np.divide(hist_ree, hist_com, out=np.full_like(hist_ree, np.nan, dtype=float), where=hist_com > 0)
