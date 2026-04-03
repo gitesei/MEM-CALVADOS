@@ -19,6 +19,7 @@ from Bio.SeqUtils import seq3
 from .components import *
 
 from .pressuredatareporter import PressureDataReporter
+from .forcegroupreporter import ForceGroupReporter
 
 class Sim:
     def __init__(self,path,config,components):
@@ -156,13 +157,15 @@ class Sim:
         self.count_components()
 
         # init interactions
-        self.ah, self.yu = interactions.init_nonbonded_interactions(
-            self.eps_lj,self.cutoff_lj,self.eps_yu,self.k_yu,self.cutoff_yu,self.fixed_lambda
-            )
         if self.nlipids > 0:
-            self.isolf = interactions.init_lipid_interactions(
-            self.eps_lj,self.eps_yu,self.cutoff_yu
-            )
+            self.ah = interactions.init_ah_interactions(self.eps_lj,self.cutoff_lj,self.fixed_lambda)
+            self.yu_ll = interactions.init_yu_interactions(self.eps_yu,self.k_yu,self.cutoff_yu)
+            self.yu_pl = interactions.init_yu_interactions(self.eps_yu,self.k_yu,self.cutoff_yu)
+            self.isolf_ll = interactions.init_isolf_interactions(self.eps_lj,self.cutoff_yu)
+            self.isolf_pl = interactions.init_isolf_interactions(self.eps_lj,self.cutoff_yu)
+        else:
+            self.ah = init_ah_interactions(self.eps_lj,self.cutoff_lj,self.fixed_lambda)
+            self.yu = init_yu_interactions(self.eps_yu,self.k_yu,self.cutoff_yu)
 
         self.nparticles = 0 # bead counter
         self.grid_counter = 0 # molecule counter for xy and xyz grids
@@ -224,9 +227,19 @@ class Sim:
                     self.add_ext_restraints(comp)
 
         if self.nlipids > 0:
-            self.isolf.addInteractionGroup(lipid_indices, lipid_indices)
-            self.isolf.addInteractionGroup(protein_indices, lipid_indices)
             self.ah.addInteractionGroup(protein_indices, protein_indices)
+            self.ah.setForceGroup(0)
+            self.isolf_ll.addInteractionGroup(lipid_indices, lipid_indices)
+            self.isolf_ll.setForceGroup(1)
+            self.yu_ll.addInteractionGroup(lipid_indices, lipid_indices)
+            self.yu_ll.setForceGroup(1)
+            self.isolf_pl.addInteractionGroup(protein_indices, lipid_indices)
+            self.isolf_pl.setForceGroup(2)
+            self.yu_pl.addInteractionGroup(protein_indices, lipid_indices)
+            self.yu_pl.setForceGroup(2)
+        else:
+            self.ah.setForceGroup(0)
+            self.yu.setForceGroup(1)
 
         if self.custom_restraints:
             self.map_custom_restraints()
@@ -247,15 +260,14 @@ class Sim:
         """ Add forces to system. """
 
         # Intermolecular forces
-        if self.nproteins + self.nrnas + self.ncrowders + self.nlipids != 0:
+        if self.nlipids > 0:
+            for force in [self.ah,self.yu_ll,self.yu_pl,self.isolf_ll,self.isolf_pl]:
+                self.system.addForce(force)
+        elif self.nproteins + self.nrnas + self.ncrowders != 0:
             for force in [self.yu, self.ah]:
                 self.system.addForce(force)
         else:
             self.system.addForce(self.ah)
-
-        if self.nlipids > 0:
-            for force in [self.isolf]:
-                self.system.addForce(force)
 
         # Intramolecular forces
         for comp in self.components:
@@ -304,9 +316,17 @@ class Sim:
                 output.write(openmm.XmlSerializer.serialize(self.system))
 
         print(f'{self.nparticles} particles in the system')
-        print('---------- FORCES ----------')
-        print(f'ah: {self.ah.getNumParticles()} particles, {self.ah.getNumExclusions()} exclusions')
-        print(f'yu: {self.yu.getNumParticles()} particles, {self.yu.getNumExclusions()} exclusions')
+        if self.nlipids > 0:
+            print('---------- FORCES ----------')
+            print(f'ah: {self.ah.getNumParticles()} particles, {self.ah.getNumExclusions()} exclusions')
+            print(f'yu (lipid-lipid): {self.yu_ll.getNumParticles()} particles, {self.yu_ll.getNumExclusions()} exclusions')
+            print(f'yu (protein-lipid): {self.yu_pl.getNumParticles()} particles, {self.yu_pl.getNumExclusions()} exclusions')
+            print(f'isolf (lipid-lipid): {self.isolf_ll.getNumParticles()} particles, {self.isolf_ll.getNumExclusions()} exclusions')
+            print(f'isolf (protein-lipid): {self.isolf_pl.getNumParticles()} particles, {self.isolf_pl.getNumExclusions()} exclusions')
+        else:
+            print('---------- FORCES ----------')
+            print(f'ah: {self.ah.getNumParticles()} particles, {self.ah.getNumExclusions()} exclusions')
+            print(f'yu: {self.yu.getNumParticles()} particles, {self.yu.getNumExclusions()} exclusions')
         if self.slab_eq:
             print(f'Equilibration restraints (rcent) towards box center in z direction')
             print(f'rcent: {self.rcent.getNumParticles()} restraints')
@@ -396,11 +416,15 @@ class Sim:
     def add_exclusions(self, exclusion_map):
         # exclude LJ, YU for restrained pairs
         for excl in exclusion_map:
-            self.ah = interactions.add_exclusion(self.ah, excl[0], excl[1])
-            self.yu = interactions.add_exclusion(self.yu, excl[0], excl[1])
             if self.nlipids > 0:
-                self.isolf.addExclusion(excl[0], excl[1])
-                #self.cn.addExclusion(excl[0], excl[1])
+                self.ah.addExclusion(excl[0], excl[1])
+                self.isolf_ll.addExclusion(excl[0], excl[1])
+                self.yu_ll.addExclusion(excl[0], excl[1])
+                self.isolf_pl.addExclusion(excl[0], excl[1])
+                self.yu_pl.addExclusion(excl[0], excl[1])
+            else:
+                self.ah.addExclusion(excl[0], excl[1])
+                self.yu.addExclusion(excl[0], excl[1])
 
     def add_interactions(self,comp):
         """
@@ -410,25 +434,24 @@ class Sim:
         offset = self.nparticles - comp.nbeads # to get indices of current comp in context of system
 
         # Add Ashbaugh-Hatch
-        if self.nlipids == 0:
+        if self.nlipids > 0:
+            for sig, lam, ome in zip(comp.sigmas, comp.lambdas, comp.omegas):
+                self.ah.addParticle([sig*unit.nanometer, lam, 1])
+                self.isolf_ll.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer])
+                self.isolf_pl.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer])
+            # Add Debye-Huckel
+            for q in comp.qs:
+                self.yu_ll.addParticle([q])
+                self.yu_pl.addParticle([q])
+        else:
             for sig, lam in zip(comp.sigmas, comp.lambdas):
                 if comp.molecule_type == 'crowder':
                     self.ah.addParticle([sig*unit.nanometer, lam, -1])
                 else: # protein, RNA
                     self.ah.addParticle([sig*unit.nanometer, lam, 1])
-        else:
-            if comp.molecule_type == 'lipid':
-                for sig, lam, ome in zip(comp.sigmas, comp.lambdas, comp.omegas):
-                    self.ah.addParticle([sig*unit.nanometer, lam, -1])
-                    self.isolf.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer, 1])
-            else:
-                for sig, lam, ome in zip(comp.sigmas, comp.lambdas, comp.omegas):
-                    self.ah.addParticle([sig*unit.nanometer, lam, 1])
-                    self.isolf.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer, -5])
-
-        # Add Debye-Huckel
-        for q in comp.qs:
-            self.yu.addParticle([q])
+            # Add Debye-Huckel
+            for q in comp.qs:
+                self.yu.addParticle([q])
 
         # Add Charge-Nonpolar Interaction
         #if self.nlipids > 0:
@@ -706,10 +729,14 @@ class Sim:
 
             masses = np.array([simulation.system.getParticleMass(i).value_in_unit(unit.dalton) for i in range(simulation.system.getNumParticles())])
             simulation.reporters.append(PressureDataReporter(f'{self.path}/{self.sysname}.npy',int(self.pressurefreq),pressure_tensor=self.pressure_tensor,append=append,volume=np.prod(self.box),masses=masses))
-
+       
         simulation.reporters.append(app.dcdreporter.DCDReporter(f'{self.path}/{self.sysname:s}.dcd',self.wfreq,append=append))
         simulation.reporters.append(app.statedatareporter.StateDataReporter(f'{self.path}/{self.sysname}.log',self.logfreq,
                 step=True,speed=True,elapsedTime=True,potentialEnergy=self.report_potential_energy,separator='\t',append=append))
+        if self.nlipids > 0 and self.report_potential_energy:
+                simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ah.log', self.logfreq, group=0, append=append))
+                simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ll.log', self.logfreq, group=1, append=append))
+                simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_pl.log', self.logfreq, group=2, append=append))
 
         print("STARTING SIMULATION", flush=True)
         if self.runtime > 0: # in hours
