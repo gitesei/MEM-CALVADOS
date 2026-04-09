@@ -6,6 +6,7 @@ calvados/analysis.py
 calvados/build.py
 calvados/cfg.py
 calvados/components.py
+calvados/forcegroupreporter.py
 calvados/interactions.py
 calvados/pressuredatareporter.py
 calvados/sequence.py

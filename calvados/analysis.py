@@ -826,16 +826,17 @@ def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},sta
                 W.write(ag)
 
     traj = md.load_dcd(f'{path:s}/traj.dcd',top=f'{path:s}/'+input_pdb)
-    traj.xyz -= traj.unitcell_lengths[0,:]/2
+    traj.xyz -= traj.unitcell_lengths/2
 
     if len(chainid_dict) == 0:
         chainid_dict[sysname] = (0, traj.top.n_chains-1)
 
     residues = pd.read_csv(residues_file, index_col='three')
 
-    lx = traj.unitcell_lengths[0,0]
-    ly = traj.unitcell_lengths[0,1]
-    lz = traj.unitcell_lengths[0,2]
+    s = md.load_pdb(f'{path:s}/'+input_pdb)
+    lx = s.unitcell_lengths[0,0]
+    ly = s.unitcell_lengths[0,1]
+    lz = s.unitcell_lengths[0,2]
     binwidth = 0.1 # nm
     volume = lx*ly*binwidth # volume of a slice in nm3
     conv_to_mM = 10/6.02214/volume*1e3 # conversion to mM
