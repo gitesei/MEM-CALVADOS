@@ -826,7 +826,7 @@ def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},sta
                 W.write(ag)
 
     traj = md.load_dcd(f'{path:s}/traj.dcd',top=f'{path:s}/'+input_pdb)
-    traj.xyz -= traj.unitcell_lengths/2
+    traj.xyz -= traj.unitcell_lengths[:,None,:]/2
 
     if len(chainid_dict) == 0:
         chainid_dict[sysname] = (0, traj.top.n_chains-1)
