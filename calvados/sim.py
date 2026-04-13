@@ -595,7 +595,8 @@ class Sim:
         # assemble simulation
         platform = openmm.Platform.getPlatformByName(self.platform)
         if self.platform == 'CPU':
-            simulation = app.simulation.Simulation(pdb.topology, self.system, integrator, platform, dict(Threads=str(self.threads)))
+            platform.setPropertyDefaultValue("Threads", str(self.threads))
+            simulation = app.simulation.Simulation(pdb.topology, self.system, integrator, platform)
         else:
             if os.environ.get('CUDA_VISIBLE_DEVICES') is None:
                 platform.setPropertyDefaultValue('DeviceIndex',str(self.gpu_id))
@@ -647,7 +648,8 @@ class Sim:
                     break
             integrator = openmm.openmm.LangevinIntegrator(self.temp*unit.kelvin,self.friction_coeff/unit.picosecond,0.01*unit.picosecond)
             if self.platform == 'CPU':
-                simulation = app.simulation.Simulation(pdb.topology, self.system, integrator, platform, dict(Threads=str(self.threads)))
+                platform.setPropertyDefaultValue("Threads", str(self.threads))
+                simulation = app.simulation.Simulation(pdb.topology, self.system, integrator, platform)
             else:
                 simulation = app.simulation.Simulation(pdb.topology, self.system, integrator, platform)
             simulation.context.setPositions(pdb.positions)
@@ -681,7 +683,8 @@ class Sim:
                 print(index,force)
             integrator = openmm.openmm.LangevinIntegrator(self.temp*unit.kelvin,self.friction_coeff/unit.picosecond,0.01*unit.picosecond)
             if self.platform == 'CPU':
-                simulation = app.simulation.Simulation(topology, self.system, integrator, platform, dict(Threads=str(self.threads)))
+                platform.setPropertyDefaultValue("Threads", str(self.threads))
+                simulation = app.simulation.Simulation(topology, self.system, integrator, platform)
             else:
                 simulation = app.simulation.Simulation(topology, self.system, integrator, platform)
             simulation.context.setPositions(state_final.getPositions())
@@ -731,7 +734,8 @@ class Sim:
             integrator.setKineticEnergyExpression("m*v*v/2")
 
             if self.platform == 'CPU':
-                simulation = app.simulation.Simulation(pdb.topology, self.system, integrator, platform, dict(Threads=str(self.threads)))
+                platform.setPropertyDefaultValue("Threads", str(self.threads))
+                simulation = app.simulation.Simulation(pdb.topology, self.system, integrator, platform)
             else:
                 simulation = app.simulation.Simulation(pdb.topology, self.system, integrator, platform)
             simulation.context.setPositions(pdb.positions)
@@ -748,9 +752,9 @@ class Sim:
         simulation.reporters.append(app.statedatareporter.StateDataReporter(f'{self.path}/{self.sysname}.log',self.logfreq,
                 step=True,speed=True,elapsedTime=True,potentialEnergy=self.report_potential_energy,separator='\t',append=append))
         if self.nlipids > 0 and self.report_potential_energy:
-                simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ah_pp.log', self.logfreq, group=0, append=append))
-                simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_yu_pp.log', self.logfreq, group=1, append=append))
-                simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ll.log', self.logfreq, group=2, append=append))
+                #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ah_pp.log', self.logfreq, group=0, append=append))
+                #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_yu_pp.log', self.logfreq, group=1, append=append))
+                #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ll.log', self.logfreq, group=2, append=append))
                 simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_pl.log', self.logfreq, group=3, append=append))
 
         print("STARTING SIMULATION", flush=True)

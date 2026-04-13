@@ -20,7 +20,7 @@ eq_apl_dict = {
 }
 
 cwd = os.getcwd()
-N_save = int(5e4)
+N_save = int(1e4)
 N_frames = 5020
 Lx = 12
 Ly = Lx
