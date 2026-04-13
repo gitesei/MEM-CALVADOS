@@ -826,7 +826,7 @@ def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},sta
                 W.write(ag)
 
     traj = md.load_dcd(f'{path:s}/traj.dcd',top=f'{path:s}/'+input_pdb)
-    traj.xyz -= traj.unitcell_lengths[:,None,:]/2
+    lz_variable = traj.unitcell_lengths[:, 2]
 
     if len(chainid_dict) == 0:
         chainid_dict[sysname] = (0, traj.top.n_chains-1)
@@ -834,13 +834,12 @@ def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},sta
     residues = pd.read_csv(residues_file, index_col='three')
 
     s = md.load_pdb(f'{path:s}/'+input_pdb)
-    lx = s.unitcell_lengths[0,0]
-    ly = s.unitcell_lengths[0,1]
-    lz = s.unitcell_lengths[0,2]
+    half_lz = s.unitcell_lengths[0,2]/2
+    traj.xyz -= half_lz
     binwidth = 0.1 # nm
-    volume = lx*ly*binwidth # volume of a slice in nm3
+    volume = s.unitcell_lengths[0,0]*s.unitcell_lengths[0,1]*binwidth # volume of a slice in nm3
     conv_to_mM = 10/6.02214/volume*1e3 # conversion to mM
-    edges = np.arange(-lz/2,lz/2+binwidth,binwidth)
+    edges = np.arange(-half_lz,half_lz+binwidth,binwidth)
     z = edges[:-1]+binwidth/2.
 
     chain_prop = {}
@@ -887,11 +886,11 @@ def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},sta
             ree_array = np.linalg.norm(ree_vec, axis=1)
             evals, evecs = np.linalg.eigh(q)
             cos_array = np.abs(evecs[:, 2, 2])
-            com_z_wrapped = (com[:, 2] + 0.5*lz) % lz - 0.5*lz
+            com_z_wrapped = ((com[:, 2] + half_lz) % lz_variable) - half_lz
             hist_com += np.histogram(com_z_wrapped,bins=edges)[0]
-            hist_rg += np.histogram(com_z_wrapped,bins=edges, weights=rg_array)[0]
-            hist_ree += np.histogram(com_z_wrapped,bins=edges, weights=ree_array)[0]
-            hist_cos += np.histogram(com_z_wrapped,bins=edges, weights=cos_array)[0]
+            hist_rg += np.histogram(com_z_wrapped,bins=edges,weights=rg_array)[0]
+            hist_ree += np.histogram(com_z_wrapped,bins=edges,weights=ree_array)[0]
+            hist_cos += np.histogram(com_z_wrapped,bins=edges,weights=cos_array)[0]
             np.save(output_path+f'/{sysname:s}_{chain_name:s}_{chainid:d}_com_z.npy',com_z_wrapped)
         chain_prop[chain_name]['com'] = hist_com / traj.n_frames * conv_to_mM
         chain_prop[chain_name]['rg']  = np.divide(hist_rg, hist_com, out=np.full_like(hist_rg, np.nan, dtype=float), where=hist_com > 0)
