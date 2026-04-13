@@ -21,7 +21,7 @@ eq_apl_dict = {
 
 cwd = os.getcwd()
 N_save = int(5e4)
-N_frames = 5200
+N_frames = 5020
 Lx = 12
 Ly = Lx
 area_per_lipid = eq_apl_dict['POPC']
@@ -37,7 +37,7 @@ config = Config(
   sysname = sysname, # name of simulation system
   box = [Lx, Ly, 22.], # nm
   temp = 297.15,
-  ionic = 0.15, # molar
+  ionic = 0.05, # molar
   pH = 7,
   topol = 'shift_ref_bead',
   report_potential_energy = True,
@@ -76,7 +76,7 @@ slab = SlabAnalysis(name="{sysname:s}", input_path="{path:s}",
                     client_chain_list = [(0,0)],
                     verbose=True)
 
-slab.center(start=200, center_target='ref')
+slab.center(start=20, center_target='ref')
 slab.calc_profiles()
 slab.calc_concentrations()
 calc_bilayer_prop(path="{path:s}",sysname="{sysname:s}",output_path="{output_path:s}")
@@ -99,5 +99,5 @@ components = Components(
   fresidues = residues_file, # residue definitions
 )
 components.add(name='POPC', molecule_type='lipid', nmol=int(N_lipids))
-components.add(name=args.name, molecule_type='protein', nmol=1, ref_bead=2, pos_bead=[0,0,2.5], fixed_bead=True)
+components.add(name=args.name, molecule_type='protein', nmol=1, ref_bead=2, pos_bead=[0,0,2.6], charge_termini='C')
 components.write(path,name='components.yaml')

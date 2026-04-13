@@ -13,12 +13,13 @@ parser.add_argument('--name',nargs='?',required=True,type=str)
 args = parser.parse_args()
 
 prot_data = {
+    "AEROLYSIN":  {"ref_bead": 262, "tmd_sel": "resid 216 to 282 or resid 640 to 706 or resid 1064 to 1130 or resid 1488 to 1554 or resid 1912 to 1978 or resid 2336 to 2402 or resid 2760 to 2826"},
     "KALP25_IDR": {"ref_bead": 12,  "tmd_sel": "resid 3 to 22"},
     "RHD_IDR":    {"ref_bead": 125, "tmd_sel": "resid 15 to 29 or resid 35 to 49 or resid 118 to 131 or resid 139 to 150"},
     "RHO":        {"ref_bead": 52,  "tmd_sel": "resid 34 to 321"},
     "ADRA2A":     {"ref_bead": 134, "tmd_sel": "resid 46 to 185 or resid 208 to 245 or resid 379 to 458"},
     "hGHR":       {"ref_bead": 270, "tmd_sel": "resid 265 to 287"},
-    "EGFR":       {"ref_bead": 633, "tmd_sel": "resid 682 to 955"},
+    "EGFR":       {"ref_bead": 633, "tmd_sel": "resid 622 to 643"},
     "NHE1_CHP1":  {"ref_bead": 390, "tmd_sel": "resid 99 to 591 or resid 914 to 1406"}
 }
 
@@ -27,10 +28,10 @@ tmd_sel = prot_data[args.name]['tmd_sel']
 
 cwd = os.getcwd()
 N_save = int(5e4)
-N_frames = 1000
+N_frames = 1010
 Lx = 30
 Ly = Lx
-area_per_lipid = .63
+area_per_lipid = .65
 N_lipids = int(np.ceil(Lx*Ly/area_per_lipid)*2)
 
 sysname = f'{args.name:s}'
@@ -44,7 +45,6 @@ config = Config(
   ionic = 0.15, # molar
   pH = 7,
   topol = 'shift_ref_bead',
-  ref_bead = ref_bead,
   bilayer_eq = True,
   friction = 0.01,
   pressure_coupling = True,
@@ -71,7 +71,7 @@ subprocess.run(f'mkdir -p {output_path}',shell=True)
 analyses = f"""
 from calvados.analysis import calc_membrane_profiles, calc_tmd_distances_and_angles
 
-calc_membrane_profiles("{path}","{sysname}","{output_path}","{residues_file}","{tmd_sel}",400)
+calc_membrane_profiles("{path}","{sysname}","{output_path}","{residues_file}","{tmd_sel}",10)
 calc_tmd_distances_and_angles("{path}","{sysname}","{output_path}","{tmd_sel}")
 """
 
@@ -91,6 +91,6 @@ components = Components(
   pdb_folder = f'{cwd}/input', # directory for pdb and PAE files
 )
 components.add(name='DOPC', molecule_type='lipid', nmol=N_lipids)
-components.add(name=args.name, restraint=True, charge_termini='both')
+components.add(name=args.name, restraint=True, charge_termini='both', ref_bead=ref_bead)
 components.write(path,name='components.yaml')
 
