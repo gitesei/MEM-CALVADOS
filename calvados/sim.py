@@ -312,7 +312,8 @@ class Sim:
             barostat = openmm.openmm.MonteCarloMembraneBarostat(self.pressure[0]*unit.bar,
                     0*unit.bar*unit.nanometer, self.temp*unit.kelvin,
                     openmm.openmm.MonteCarloMembraneBarostat.XYIsotropic,
-                    openmm.openmm.MonteCarloMembraneBarostat.ConstantVolume, 10000)
+                    openmm.openmm.MonteCarloMembraneBarostat.ZFixed, 10000)
+                    #openmm.openmm.MonteCarloMembraneBarostat.ConstantVolume, 10000)
         #    barostat = openmm.openmm.MonteCarloBarostat(self.pressure[0]*unit.bar,
         #            self.temp*unit.kelvin,100000)
             self.system.addForce(barostat)
@@ -752,8 +753,8 @@ class Sim:
         simulation.reporters.append(app.statedatareporter.StateDataReporter(f'{self.path}/{self.sysname}.log',self.logfreq,
                 step=True,speed=True,elapsedTime=True,potentialEnergy=self.report_potential_energy,separator='\t',append=append))
         if self.nlipids > 0 and self.report_potential_energy:
-                #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ah_pp.log', self.logfreq, group=0, append=append))
-                #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_yu_pp.log', self.logfreq, group=1, append=append))
+                simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ah_pp.log', self.logfreq, group=0, append=append))
+                simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_yu_pp.log', self.logfreq, group=1, append=append))
                 #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ll.log', self.logfreq, group=2, append=append))
                 simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_pl.log', self.logfreq, group=3, append=append))
 
