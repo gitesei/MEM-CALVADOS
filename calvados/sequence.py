@@ -1,7 +1,7 @@
 import numpy as np
 
 from MDAnalysis import Universe
-from MDAnalysis.lib.util import convert_aa_code
+#from MDAnalysis.lib.util import convert_aa_code
 
 
 import random
@@ -31,7 +31,7 @@ def read_fasta(ffasta):
     records = SeqIO.to_dict(SeqIO.parse(ffasta, "fasta"))
     return records
 
-def seq_from_pdb(pdb,selection='all',fmt='string'):
+def seq_from_pdb(pdb,convert_aa_code,selection='all',fmt='string'):
     """ Generate fasta from pdb entries """
 
     with warnings.catch_warnings():
@@ -55,7 +55,7 @@ def seq_from_pdb(pdb,selection='all',fmt='string'):
     res3 = ag.residues.resnames
     for res in res3:
         if len(res) == 3:
-            res1 = convert_aa_code(res)
+            res1 = convert_aa_code[res]
         else:
             res1 = res
         if res1 == "":
@@ -758,7 +758,7 @@ class SeqFeatures:
 
             # q_intgrl_map = make_q_intgrl_map(residues)
             # self.q_ij = calc_q_ij(seq,q_intgrl_map)
-            
+
         if nu_file is not None:
             self.kappa = calc_kappa_manual(seq,residues=residues)
             if self.kappa == -1: # no charges

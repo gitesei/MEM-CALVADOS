@@ -33,7 +33,8 @@ class Component:
         """ Calculate sequence of component. """
 
         if self.restraint:
-            self.seq, self.n_termini, self.c_termini = seq_from_pdb(f'{self.pdb_folder}/{self.name}.pdb')
+            convert_aa_code = self.residues.reset_index().set_index('three')['one'].to_dict()
+            self.seq, self.n_termini, self.c_termini = seq_from_pdb(f'{self.pdb_folder}/{self.name}.pdb',convert_aa_code)
         else:
             records = read_fasta(self.ffasta)
             self.seq = str(records[self.name].seq)
