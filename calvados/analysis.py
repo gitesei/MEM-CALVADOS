@@ -1258,14 +1258,8 @@ def calc_membrane_profiles(
         for ts in cg.trajectory:
             W.write(cg.atoms)
 
-def calc_tmd_distances_and_angles(
-    path,
-    sysname,
-    output_path,
-    tmd_sel,
-    saving_interval=1.0,
-):
-    def _tmd_angle_to_z(pos):
+def calc_domain_angles(path, sysname, output_path, angle_sels, saving_interval=1.0):
+    def _domain_angle_to_z(pos):
         x = pos - pos.mean(axis=0, keepdims=True)
         C = (x.T @ x) / x.shape[0]
         w, v = np.linalg.eigh(C)
@@ -1275,11 +1269,12 @@ def calc_tmd_distances_and_angles(
 
     u = mda.Universe(f"{path}/prot_CG.pdb", f"{path}/prot_CG.dcd", in_memory=True)
     prot = u.atoms
-    tmd = u.select_atoms(tmd_sel)
+    angle_domains = {name: u.select_atoms(sel) for name, sel in angle_sels.items()}
 
     mean = np.zeros(prot.n_atoms)
     M2 = np.zeros(prot.n_atoms)
-    angles, times = [], []
+    angles = {name: [] for name in angle_domains}
+    times = []
     n = 0
 
     for ts in u.trajectory:
@@ -1291,12 +1286,30 @@ def calc_tmd_distances_and_angles(
         mean += delta / n
         M2 += delta * (dz - mean)
 
-        angles.append(_tmd_angle_to_z(tmd.positions))
+        for name, ag in angle_domains.items():
+            angles[name].append(_domain_angle_to_z(ag.positions))
+
         times.append((n-1) * saving_interval)
 
     std = np.sqrt(M2/(n-1))
     dist_out = np.c_[np.arange(prot.n_atoms)+1, mean, std]
 
     np.save(output_path + f"/{sysname}_distance_midplane.npy", dist_out)
-    np.save(output_path + f"/{sysname}_tmd_angles.npy",
-            np.c_[np.array(times), np.array(angles)])
+
+    angle_out = {"time": np.array(times)}
+    for name, vals in angles.items():
+        angle_out[name] = np.array(vals)
+
+    np.save(output_path + f"/{sysname}_domain_angles.npy", angle_out)
+
+def calc_domain_rgs(path, sysname, output_path, residues_file, rg_sels, saving_interval=1.0):
+    residues = pd.read_csv(residues_file).set_index('three')
+    u = mda.Universe(f"{path}/prot_CG.pdb", f"{path}/prot_CG.dcd", in_memory=True)
+
+    rg_out = {"time": np.arange(len(u.trajectory)) * saving_interval}
+
+    for name, sel in rg_sels.items():
+        ag = u.select_atoms(sel)
+        rg_out[name] = calc_rg(u, ag, ag.resnames.tolist(), residues)
+
+    np.save(output_path + f"/{sysname}_domain_rgs.npy", rg_out)
