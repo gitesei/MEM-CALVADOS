@@ -165,8 +165,8 @@ class Sim:
             self.isolf_ll = interactions.init_isolf_interactions(self.eps_lj,self.cutoff_yu)
             self.isolf_pl = interactions.init_isolf_interactions(self.eps_lj,self.cutoff_yu)
         else:
-            self.ah = init_ah_interactions(self.eps_lj,self.cutoff_lj,self.fixed_lambda)
-            self.yu = init_yu_interactions(self.eps_yu,self.k_yu,self.cutoff_yu)
+            self.ah = interactions.init_ah_interactions(self.eps_lj,self.cutoff_lj,self.fixed_lambda)
+            self.yu = interactions.init_yu_interactions(self.eps_yu,self.k_yu,self.cutoff_yu)
 
         self.nparticles = 0 # bead counter
         self.grid_counter = 0 # molecule counter for xy and xyz grids
@@ -187,7 +187,6 @@ class Sim:
             if (self.nproteins + self.nrnas) > 0:
                 if self.topol == 'shift_ref_bead':
                     self.xyzgrid = build.build_xyzgrid(self.nproteins+self.nrnas,self.box)
-                    self.xyzgrid[:,2] = self.box[2]/2.
                     self.xyzgrid[:,0] -= self.xyzgrid[0,0]
                     self.xyzgrid[:,1] -= self.xyzgrid[0,1]
                 else:
@@ -300,11 +299,14 @@ class Sim:
             print(f'Number of custom restraints: {self.cres.getNumBonds()}')
 
         # Barostat force
-        if self.box_eq:
-            barostat = openmm.openmm.MonteCarloAnisotropicBarostat(
-                    [self.pressure[0]*unit.bar,self.pressure[1]*unit.bar,self.pressure[2]*unit.bar],
-                    self.temp*unit.kelvin,self.boxscaling_xyz[0],self.boxscaling_xyz[1],
-                    self.boxscaling_xyz[2],1000)
+        if self.box_eq or self.pressure_coupling:
+            barostat = openmm.openmm.MonteCarloBarostat(
+                    self.pressure[0]*unit.bar,
+                    self.temp*unit.kelvin,1000)
+            #barostat = openmm.openmm.MonteCarloAnisotropicBarostat(
+            #        [self.pressure[0]*unit.bar,self.pressure[1]*unit.bar,self.pressure[2]*unit.bar],
+            #        self.temp*unit.kelvin,self.boxscaling_xyz[0],self.boxscaling_xyz[1],
+            #        self.boxscaling_xyz[2],1000)
             self.system.addForce(barostat)
 
         # Bilayer eq. force
@@ -364,10 +366,16 @@ class Sim:
             x0 = self.box * 0.5 # place in center of box
             xs = x0 + comp.xinit
         elif self.topol == 'shift_ref_bead':
-            #x0 = self.box * 0.5 # place in center of box
             x0 = self.xyzgrid[self.grid_counter]
             xs = x0 + comp.xinit
-            xs -= comp.xinit[comp.ref_bead] + comp.pos_bead
+            if comp.ref_bead < 0:
+                dz = x0[2] - 0.5 * self.box[2]
+                if np.abs(dz) < 10:
+                    direction = 1 if dz < 0 else -1
+                    xs -= comp.xinit[0] + direction * np.asarray(comp.pos_bead, dtype=float)
+            else:
+                xs -= comp.xinit[comp.ref_bead] + np.asarray(comp.pos_bead, dtype=float)
+                xs[:,2] += self.box[2] * 0.5 - x0[2]
             self.grid_counter += 1
         else:
             box = self.box if comp.subvolume is None else np.asarray(comp.subvolume)
@@ -677,6 +685,10 @@ class Sim:
                         self.system.removeForce(index)
                         break
                     if isinstance(force, openmm.openmm.MonteCarloAnisotropicBarostat):
+                        print(f'Removing barostat {index}')
+                        self.system.removeForce(index)
+                        break
+                    if isinstance(force, openmm.openmm.MonteCarloBarostat):
                         print(f'Removing barostat {index}')
                         self.system.removeForce(index)
                         break
