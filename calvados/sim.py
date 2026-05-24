@@ -299,7 +299,7 @@ class Sim:
             print(f'Number of custom restraints: {self.cres.getNumBonds()}')
 
         # Barostat force
-        if self.box_eq or self.pressure_coupling:
+        if self.box_eq:
             barostat = openmm.openmm.MonteCarloBarostat(
                     self.pressure[0]*unit.bar,
                     self.temp*unit.kelvin,1000)
@@ -773,6 +773,13 @@ class Sim:
         print("STARTING SIMULATION", flush=True)
         if self.runtime > 0: # in hours
             simulation.runForClockTime(self.runtime*unit.hour, checkpointFile=fcheck_out, checkpointInterval=30*unit.minute)
+        elif self.pressure_ramp:
+           nbatches = 200
+           batch = int(self.steps / nbatches)
+           for i in tqdm(range(nbatches), mininterval=1):
+               simulation.context.setParameter(openmm.openmm.MonteCarloBarostat.Pressure(),
+                       np.exp((i/199)*np.log(50.0))*unit.bar)
+               simulation.step(batch)
         else:
             nbatches = 10
             batch = int(self.steps / nbatches)

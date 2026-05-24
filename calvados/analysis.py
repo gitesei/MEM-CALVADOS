@@ -925,6 +925,28 @@ def cmap_chain_pairs(path,sysname,output_path,chainid_dict,input_pdb="top.pdb",c
         np.save(output_path+f"/{sysname}_{key1}_{key2}_cmap.npy", cmap)
         np.save(output_path+f"/{sysname}_{key1}_{key2}_contacts.npy", np.array(n_contacts_t))
 
+def cmap_index_range(path, sysname, output_path, indexrange_dict, input_pdb="top.pdb", cmap_cutoff=1.0):
+
+    u = mda.Universe(f"{path}/{input_pdb}", f"{path}/traj.dcd")
+    n_frames = len(u.trajectory)
+
+    for key, ((start1, end1), (start2, end2)) in indexrange_dict.items():
+        ag_1 = u.atoms[start1 - 1:end1]
+        ag_2 = u.atoms[start2 - 1:end2]
+
+        cmap = np.zeros((len(ag_1), len(ag_2)))
+        n_contacts_t = []
+
+        for ts in u.trajectory:
+            frame_cmap = calc_cmap(ag_1, ag_2, cmap_cutoff)
+            cmap += frame_cmap
+            n_contacts_t.append(np.sum(frame_cmap))
+
+        cmap /= n_frames
+
+        np.save(f"{output_path}/{sysname}_{key}_cmap.npy", cmap)
+        np.save(f"{output_path}/{sysname}_{key}_contacts.npy", np.array(n_contacts_t))
+
 def calc_com_traj(path,sysname,output_path,residues_file,chainid_dict={},start=None,end=None,step=1,input_pdb='top.pdb'):
     """
     Calculate trajectory of chain COMs and per-frame Rg's for each chain.
