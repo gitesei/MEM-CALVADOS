@@ -316,8 +316,6 @@ class Sim:
                     openmm.openmm.MonteCarloMembraneBarostat.XYIsotropic,
                     openmm.openmm.MonteCarloMembraneBarostat.ZFixed, 10000)
                     #openmm.openmm.MonteCarloMembraneBarostat.ConstantVolume, 10000)
-        #    barostat = openmm.openmm.MonteCarloBarostat(self.pressure[0]*unit.bar,
-        #            self.temp*unit.kelvin,100000)
             self.system.addForce(barostat)
 
     def print_system_summary(self, write_xml: bool = True):
@@ -778,7 +776,7 @@ class Sim:
            batch = int(self.steps / nbatches)
            for i in tqdm(range(nbatches), mininterval=1):
                simulation.context.setParameter(openmm.openmm.MonteCarloBarostat.Pressure(),
-                       np.exp((i/199)*np.log(50.0))*unit.bar)
+                       np.exp((i/199)*np.log(100.0))*unit.bar)
                simulation.step(batch)
         else:
             nbatches = 10

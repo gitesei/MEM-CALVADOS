@@ -893,7 +893,7 @@ def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},sta
             hist_rg += np.histogram(com_z_wrapped,bins=edges,weights=rg_array)[0]
             hist_ree += np.histogram(com_z_wrapped,bins=edges,weights=ree_array)[0]
             hist_cos += np.histogram(com_z_wrapped,bins=edges,weights=cos_array)[0]
-            np.save(output_path+f'/{sysname:s}_{chain_name:s}_com_z.npy',com_z_wrapped)
+            np.save(output_path+f'/{sysname:s}_{chain_name:s}_{chainid:d}_com_z.npy',com_z_wrapped)
         chain_prop[chain_name]['com'] = hist_com / traj.n_frames * conv_to_mM
         chain_prop[chain_name]['rg']  = np.divide(hist_rg, hist_com, out=np.full_like(hist_rg, np.nan, dtype=float), where=hist_com > 0)
         chain_prop[chain_name]['ree'] = np.divide(hist_ree, hist_com, out=np.full_like(hist_ree, np.nan, dtype=float), where=hist_com > 0)
@@ -925,7 +925,7 @@ def cmap_chain_pairs(path,sysname,output_path,chainid_dict,input_pdb="top.pdb",c
         np.save(output_path+f"/{sysname}_{key1}_{key2}_cmap.npy", cmap)
         np.save(output_path+f"/{sysname}_{key1}_{key2}_contacts.npy", np.array(n_contacts_t))
 
-def cmap_index_range(path, sysname, output_path, indexrange_dict, input_pdb="top.pdb", cmap_cutoff=1.0):
+def cmap_index_range(path, sysname, output_path, indexrange_dict, input_pdb="top.pdb", cmap_cutoff=1.0, binary=False):
 
     u = mda.Universe(f"{path}/{input_pdb}", f"{path}/traj.dcd")
     n_frames = len(u.trajectory)
@@ -939,6 +939,8 @@ def cmap_index_range(path, sysname, output_path, indexrange_dict, input_pdb="top
 
         for ts in u.trajectory:
             frame_cmap = calc_cmap(ag_1, ag_2, cmap_cutoff)
+            if binary:
+                frame_cmap = (frame_cmap > 0.5).astype(float)
             cmap += frame_cmap
             n_contacts_t.append(np.sum(frame_cmap))
 
