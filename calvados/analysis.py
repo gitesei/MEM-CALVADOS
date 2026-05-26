@@ -1306,18 +1306,24 @@ def calc_membrane_profiles(
         for ts in cg.trajectory:
             W.write(cg.atoms)
 
-def calc_domain_angles(path, sysname, output_path, angle_sels, saving_interval=1.0):
-    def _domain_angle_to_z(pos):
-        x = pos - pos.mean(axis=0, keepdims=True)
-        C = (x.T @ x) / x.shape[0]
-        w, v = np.linalg.eigh(C)
-        axis = v[:, np.argmax(w)]
+def calc_domain_angles(path, sysname, output_path, angle_sels, residues_file, saving_interval=1.0):
+    def _domain_angle_to_z(pos, masses):
+        x = pos - np.average(pos, axis=0, weights=masses)
+        S = (x * masses[:, None]).T @ x
+        I = np.trace(S) * np.eye(3) - S
+        w, v = np.linalg.eigh(I)
+        axis = v[:, np.argmin(w)]
         axis /= np.linalg.norm(axis)
         return np.degrees(np.arccos(np.clip(np.abs(axis[2]), 0.0, 1.0)))
 
     u = mda.Universe(f"{path}/prot_CG.pdb", f"{path}/prot_CG.dcd", in_memory=True)
     prot = u.atoms
     angle_domains = {name: u.select_atoms(sel) for name, sel in angle_sels.items()}
+
+    df_residues = pd.read_csv(residues_file, index_col=0)
+    three_to_one = dict(zip(df_residues["three"].values, df_residues.index.values))
+    seq = [three_to_one[res.resname] if len(res.resname)==3 else res.resname for res in u.residues]
+    masses = get_masses(seq, df_residues, charge_termini=True)
 
     mean = np.zeros(prot.n_atoms)
     M2 = np.zeros(prot.n_atoms)
@@ -1335,7 +1341,7 @@ def calc_domain_angles(path, sysname, output_path, angle_sels, saving_interval=1
         M2 += delta * (dz - mean)
 
         for name, ag in angle_domains.items():
-            angles[name].append(_domain_angle_to_z(ag.positions))
+            angles[name].append(_domain_angle_to_z(ag.positions, masses[ag.indices]))
 
         times.append((n-1) * saving_interval)
 
