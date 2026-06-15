@@ -75,7 +75,7 @@ def init_restraints(restraint_type):
         cs = openmm.HarmonicBondForce()
     if restraint_type == 'go':
         go_expr = 'k*(5*(s/r)^12-6*(s/r)^10)'
-        cs = openmm.CustomBondForce(go_expr+'; s=s; k=k')#; shift=(0.5*(s)/rc)^12-(0.5*(s)/rc)^6')
+        cs = openmm.CustomBondForce(go_expr)#; shift=(0.5*(s)/rc)^12-(0.5*(s)/rc)^6')
         cs.addPerBondParameter('s')
         cs.addPerBondParameter('k')
     cs.setUsesPeriodicBoundaryConditions(True)
