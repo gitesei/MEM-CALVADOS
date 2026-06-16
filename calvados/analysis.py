@@ -925,14 +925,14 @@ def cmap_chain_pairs(path,sysname,output_path,chainid_dict,input_pdb="top.pdb",c
         np.save(output_path+f"/{sysname}_{key1}_{key2}_cmap.npy", cmap)
         np.save(output_path+f"/{sysname}_{key1}_{key2}_contacts.npy", np.array(n_contacts_t))
 
-def cmap_index_range(path, sysname, output_path, indexrange_dict, input_pdb="top.pdb", cmap_cutoff=1.0, binary=False):
+def cmap_selection(path, sysname, output_path, indexrange_dict, input_pdb="top.pdb", cmap_cutoff=1.0, binary=False):
 
     u = mda.Universe(f"{path}/{input_pdb}", f"{path}/traj.dcd")
     n_frames = len(u.trajectory)
 
-    for key, ((start1, end1), (start2, end2)) in indexrange_dict.items():
-        ag_1 = u.atoms[start1 - 1:end1]
-        ag_2 = u.atoms[start2 - 1:end2]
+    for key, (sel1, sel2) in indexrange_dict.items():
+        ag_1 = u.select_atoms(sel1)
+        ag_2 = u.select_atoms(sel2)
 
         cmap = np.zeros((len(ag_1), len(ag_2)))
         n_contacts_t = []
@@ -1312,9 +1312,15 @@ def calc_domain_angles(path, sysname, output_path, angle_sels, residues_file, sa
         S = (x * masses[:, None]).T @ x
         I = np.trace(S) * np.eye(3) - S
         w, v = np.linalg.eigh(I)
-        axis = v[:, np.argmin(w)]
-        axis /= np.linalg.norm(axis)
-        return np.degrees(np.arccos(np.clip(np.abs(axis[2]), 0.0, 1.0)))
+        v = v[:, np.argsort(w)]    
+        angles = []
+        for k in range(3):
+            axis = v[:, k]
+            axis /= np.linalg.norm(axis)
+            cosang = np.clip(np.abs(axis[2]), 0.0, 1.0)
+            angles.append(np.degrees(np.arccos(cosang)))
+
+        return np.append(angles, w[np.argsort(w)])
 
     u = mda.Universe(f"{path}/prot_CG.pdb", f"{path}/prot_CG.dcd", in_memory=True)
     prot = u.atoms
