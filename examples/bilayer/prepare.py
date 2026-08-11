@@ -11,8 +11,8 @@ parser.add_argument('--gpu_id',nargs='?',required=True,type=int)
 args = parser.parse_args()
 
 cwd = os.getcwd()
-N_save = int(1e4)
-N_frames = 10
+N_save = int(5e4)
+N_frames = 100
 Lx = 10
 Ly = Lx
 area_per_lipid = .6
@@ -25,7 +25,7 @@ config = Config(
   # GENERAL
   sysname = sysname, # name of simulation system
   box = [Lx, Ly, 120.], # nm
-  temp = 293,
+  temp = 297.15,
   ionic = 0.15, # molar
   pH = 7,
   topol = 'bilayer',
@@ -49,18 +49,7 @@ output_path = f'{path}/data'
 subprocess.run(f'mkdir -p {path}',shell=True)
 subprocess.run(f'mkdir -p {output_path}',shell=True)
 
-analyses = f"""
-from calvados.analysis import SlabAnalysis, calc_bilayer_prop
-
-slab = SlabAnalysis(name="{sysname:s}", input_path="{path:s}",
-                    output_path="{output_path:s}", ref_name="{sysname:s}", verbose=True)
-
-slab.center(start=400, center_target='all')
-slab.calc_profiles()
-calc_bilayer_prop(path="{path:s}",sysname="{sysname:s}",output_path="{output_path:s}")
-"""
-
-config.write(path,name='config.yaml',analyses=analyses)
+config.write(path,name='config.yaml')
 
 components = Components(
   # Defaults

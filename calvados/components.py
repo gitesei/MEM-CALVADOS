@@ -458,7 +458,6 @@ class Lipid(Component):
         self.bondks = np.array([self.residues.loc[s].bondk for s in self.seq])
         self.angles = np.array([self.residues.loc[s].angle for s in self.seq])
         self.angleks = np.array([self.residues.loc[s].anglek for s in self.seq])
-        self.alphas = np.array([self.residues.loc[s].alpha for s in self.seq])
 
         self.calc_x_setup(comp_setup=comp_setup)
         self.init_bond_force()
@@ -496,7 +495,7 @@ class Lipid(Component):
             for j in range(i, self.nbeads):
                 if self.bond_check(i,j):
                     d = self.bondlengths[i]
-                    k = 2*self.bondks[i]
+                    k = self.bondks[i]
                     bidx = self.hb.addBond(
                         i+offset, j+offset, d*unit.nanometer,
                         k*unit.kilojoules_per_mole/(unit.nanometer**2))
@@ -510,7 +509,7 @@ class Lipid(Component):
             for j in range(i, self.nbeads):
                 if self.angle_check(i,j):
                     a = self.angles[i]
-                    k = 2*self.angleks[i]
+                    k = self.angleks[i]
                     aidx = self.ha.addAngle(
                         i+offset,i+1+offset,j+offset,
                         a*unit.radian,
