@@ -607,8 +607,12 @@ class Sim:
         else:
             if os.environ.get('CUDA_VISIBLE_DEVICES') is None:
                 platform.setPropertyDefaultValue('DeviceIndex',str(self.gpu_id))
+            platform.setPropertyDefaultValue("Precision", self.gpu_precision)
             simulation = app.simulation.Simulation(pdb.topology, self.system, integrator, platform)
         print('Running on', platform.getName())
+        for name in platform.getPropertyNames():
+            value = platform.getPropertyValue(simulation.context, name)
+            print(f"{name}: {value}")
 
         if (os.path.isfile(fcheck_in)) and (self.restart == 'checkpoint'):
             if not os.path.isfile(f'{self.path}/{self.sysname:s}.dcd'):
@@ -763,21 +767,27 @@ class Sim:
         simulation.reporters.append(app.statedatareporter.StateDataReporter(f'{self.path}/{self.sysname}.log',self.logfreq,
                 step=True,speed=True,elapsedTime=True,potentialEnergy=self.report_potential_energy,separator='\t',append=append))
         if self.nlipids > 0 and self.report_potential_energy:
-                simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ah_pp.log', self.logfreq, group=0, append=append))
-                simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_yu_pp.log', self.logfreq, group=1, append=append))
-                #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ll.log', self.logfreq, group=2, append=append))
-                simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_pl.log', self.logfreq, group=3, append=append))
+            simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ah_pp.log', self.logfreq, group=0, append=append))
+            simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_yu_pp.log', self.logfreq, group=1, append=append))
+            #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ll.log', self.logfreq, group=2, append=append))
+            simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_pl.log', self.logfreq, group=3, append=append))
 
         print("STARTING SIMULATION", flush=True)
         if self.runtime > 0: # in hours
             simulation.runForClockTime(self.runtime*unit.hour, checkpointFile=fcheck_out, checkpointInterval=30*unit.minute)
         elif self.pressure_ramp:
-           nbatches = 200
-           batch = int(self.steps / nbatches)
-           for i in tqdm(range(nbatches), mininterval=1):
-               simulation.context.setParameter(openmm.openmm.MonteCarloBarostat.Pressure(),
-                       np.exp((i/199)*np.log(100.0))*unit.bar)
-               simulation.step(batch)
+            nbatches = 200
+            batch = int(self.steps/nbatches)
+            with open(f'{self.path}/pressure_ramp.txt','w') as f:
+                f.write("batch,start_step,end_step,pressure_bar\n")
+                for i in tqdm(range(nbatches),mininterval=1):
+                    frac = i/(nbatches-1)
+                    pressure = np.exp(frac*np.log(self.pressure_max))
+                    start_step = i*batch
+                    end_step = (i+1)*batch
+                    simulation.context.setParameter(openmm.openmm.MonteCarloBarostat.Pressure(),pressure*unit.bar)
+                    simulation.step(batch)
+                    f.write(f"{i},{start_step},{end_step},{pressure:.12g}\n")
         else:
             nbatches = 10
             batch = int(self.steps / nbatches)
