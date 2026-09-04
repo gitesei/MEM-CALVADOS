@@ -156,14 +156,25 @@ class Sim:
         self.make_components()
         self.count_components()
 
+        self.cutoff_wca = 2**(1/6) * max(np.max(comp.sigmas) for comp in self.components)
+        self.cutoff_sa = max(2**(1/6) * sig + ome for comp in self.components
+            for sig, ome in zip(comp.sigmas, comp.omegas) if ome > 0)
+
         # init interactions
         if self.nlipids > 0:
-            self.ah = interactions.init_ah_interactions(self.eps_lj,self.cutoff_lj,self.fixed_lambda)
-            self.yu_pp = interactions.init_yu_interactions(self.eps_yu,self.k_yu,self.cutoff_yu)
-            self.yu_ll = interactions.init_yu_interactions(self.eps_yu,self.k_yu,self.cutoff_yu)
-            self.yu_pl = interactions.init_yu_interactions(self.eps_yu,self.k_yu,self.cutoff_yu)
-            self.isolf_ll = interactions.init_isolf_interactions(self.eps_lj,self.cutoff_yu)
-            self.isolf_pl = interactions.init_isolf_interactions(self.eps_lj,self.cutoff_yu)
+            self.wca = interactions.init_wca_interactions(self.eps_lj,self.cutoff_wca)
+            #self.wca_pl = interactions.init_wca_interactions(self.eps_lj, self.cutoff_wca)
+            self.ah_pp = interactions.init_ah_interactions(self.eps_lj,self.cutoff_lj,self.fixed_lambda)
+            self.ah = interactions.init_ah_lipid_interactions(self.eps_lj,self.cutoff_lj)
+            #self.ah_ll = interactions.init_ah_lipid_interactions(self.eps_lj, self.cutoff_lj)
+            #self.ah_pl = interactions.init_ah_lipid_interactions(self.eps_lj, self.cutoff_lj)
+            self.sa = interactions.init_sa_interactions(self.eps_lj,self.cutoff_sa)
+            #self.sa_ll = interactions.init_sa_interactions(self.eps_lj, self.cutoff_sa)
+            #self.sa_pl = interactions.init_sa_interactions(self.eps_lj, self.cutoff_sa)
+            self.yu = interactions.init_yu_interactions(self.eps_yu,self.k_yu,self.cutoff_yu)
+            #self.yu_pp = interactions.init_yu_interactions(self.eps_yu,self.k_yu,self.cutoff_yu)
+            #self.yu_ll = interactions.init_yu_interactions(self.eps_yu,self.k_yu,self.cutoff_yu)
+            #self.yu_pl = interactions.init_yu_interactions(self.eps_yu,self.k_yu,self.cutoff_yu)
         else:
             self.ah = interactions.init_ah_interactions(self.eps_lj,self.cutoff_lj,self.fixed_lambda)
             self.yu = interactions.init_yu_interactions(self.eps_yu,self.k_yu,self.cutoff_yu)
@@ -199,6 +210,11 @@ class Sim:
 
         protein_indices = set()
         lipid_indices = set()
+        omega_ltt_indices = set()
+        omega_lhd_indices  = set()
+        omega_htt_indices = set()
+        omega_mid_indices = set()
+        charged_indices = set()
         current_index = 0
 
         for cidx, comp in enumerate(self.components):
@@ -226,6 +242,19 @@ class Sim:
                          lipid_indices.add(current_index)
                     if comp.molecule_type in ['protein']:
                          protein_indices.add(current_index)
+
+                    omega = comp.omegas[bead]
+                    charge = comp.qs[bead]
+                    if np.isclose(omega, -2.0):
+                        omega_ltt_indices.add(current_index)
+                    elif np.isclose(omega, -1.0):
+                        omega_lhd_indices.add(current_index)
+                    elif np.isclose(omega, -0.5):
+                        omega_mid_indices.add(current_index)
+                    elif omega > 0:
+                        omega_htt_indices.add(current_index)
+                    if not np.isclose(charge, 0.0):
+                        charged_indices.add(current_index)
                     current_index += 1
 
                 # add restraints towards box center
@@ -233,21 +262,30 @@ class Sim:
                     self.add_ext_restraints(comp)
 
         if self.nlipids > 0:
-            self.ah.addInteractionGroup(protein_indices, protein_indices)
-            self.ah.setForceGroup(0)
-            self.yu_pp.addInteractionGroup(protein_indices, protein_indices)
-            self.yu_pp.setForceGroup(1)
-            self.isolf_ll.addInteractionGroup(lipid_indices, lipid_indices)
-            self.isolf_ll.setForceGroup(2)
-            self.yu_ll.addInteractionGroup(lipid_indices, lipid_indices)
-            self.yu_ll.setForceGroup(2)
-            self.isolf_pl.addInteractionGroup(protein_indices, lipid_indices)
-            self.isolf_pl.setForceGroup(3)
-            self.yu_pl.addInteractionGroup(protein_indices, lipid_indices)
-            self.yu_pl.setForceGroup(3)
+            protein_ltt = protein_indices & omega_ltt_indices
+            protein_gly = protein_indices & omega_mid_indices
+            protein_htt = protein_indices & omega_htt_indices
+            lipid_ser = lipid_indices & omega_ltt_indices
+            lipid_lhd = lipid_indices & omega_lhd_indices
+            lipid_mid = lipid_indices & omega_mid_indices
+            lipid_ltl = lipid_indices & omega_htt_indices
+            self.wca.addInteractionGroup(protein_ltt | lipid_ser, lipid_ltl | lipid_mid)
+            self.wca.addInteractionGroup(protein_htt, lipid_ser | lipid_lhd | lipid_mid)
+            self.wca.addInteractionGroup(protein_gly, lipid_indices)
+            self.wca.addInteractionGroup(lipid_lhd | lipid_mid, lipid_ltl | lipid_lhd | lipid_mid)
+            self.wca.setForceGroup(0)
+            self.ah_pp.addInteractionGroup(protein_indices, protein_indices)
+            self.ah_pp.setForceGroup(1)
+            self.ah.addInteractionGroup(lipid_ser | protein_ltt, lipid_lhd | lipid_ser)
+            self.ah.setForceGroup(1)
+            self.sa.addInteractionGroup(lipid_ltl | protein_htt, lipid_ltl)
+            self.sa.setForceGroup(2)
+            self.yu.addInteractionGroup(charged_indices, charged_indices)
+            self.yu.setForceGroup(3)
         else:
-            self.ah.setForceGroup(0)
-            self.yu.setForceGroup(1)
+            self.wca.setForceGroup(0)
+            self.ah.setForceGroup(1)
+            self.yu.setForceGroup(2)
 
         if self.custom_restraints:
             self.map_custom_restraints()
@@ -269,10 +307,10 @@ class Sim:
 
         # Intermolecular forces
         if self.nlipids > 0:
-            for force in [self.ah,self.yu_pp,self.isolf_ll,self.yu_ll,self.isolf_pl,self.yu_pl]:
+            for force in [self.wca,self.ah_pp,self.ah,self.sa,self.yu]:
                 self.system.addForce(force)
         elif self.nproteins + self.nrnas + self.ncrowders != 0:
-            for force in [self.yu, self.ah]:
+            for force in [self.wca,self.yu, self.ah]:
                 self.system.addForce(force)
         else:
             self.system.addForce(self.ah)
@@ -328,12 +366,10 @@ class Sim:
         print(f'{self.nparticles} particles in the system')
         if self.nlipids > 0:
             print('---------- FORCES ----------')
+            print(f'ah (protein-protein): {self.ah_pp.getNumParticles()} particles, {self.ah_pp.getNumExclusions()} exclusions')
             print(f'ah: {self.ah.getNumParticles()} particles, {self.ah.getNumExclusions()} exclusions')
-            print(f'yu (protein-protein): {self.yu_pp.getNumParticles()} particles, {self.yu_pp.getNumExclusions()} exclusions')
-            print(f'isolf (lipid-lipid): {self.isolf_ll.getNumParticles()} particles, {self.isolf_ll.getNumExclusions()} exclusions')
-            print(f'yu (lipid-lipid): {self.yu_ll.getNumParticles()} particles, {self.yu_ll.getNumExclusions()} exclusions')
-            print(f'isolf (protein-lipid): {self.isolf_pl.getNumParticles()} particles, {self.isolf_pl.getNumExclusions()} exclusions')
-            print(f'yu (protein-lipid): {self.yu_pl.getNumParticles()} particles, {self.yu_pl.getNumExclusions()} exclusions')
+            print(f'sa: {self.sa.getNumParticles()} particles, {self.sa.getNumExclusions()} exclusions')
+            print(f'yu: {self.yu.getNumParticles()} particles, {self.yu.getNumExclusions()} exclusions')
         else:
             print('---------- FORCES ----------')
             print(f'ah: {self.ah.getNumParticles()} particles, {self.ah.getNumExclusions()} exclusions')
@@ -436,13 +472,13 @@ class Sim:
         # exclude LJ, YU for restrained pairs
         for excl in exclusion_map:
             if self.nlipids > 0:
+                self.wca.addExclusion(excl[0], excl[1])
+                self.ah_pp.addExclusion(excl[0], excl[1])
                 self.ah.addExclusion(excl[0], excl[1])
-                self.yu_pp.addExclusion(excl[0], excl[1])
-                self.isolf_ll.addExclusion(excl[0], excl[1])
-                self.yu_ll.addExclusion(excl[0], excl[1])
-                self.isolf_pl.addExclusion(excl[0], excl[1])
-                self.yu_pl.addExclusion(excl[0], excl[1])
+                self.sa.addExclusion(excl[0], excl[1])
+                self.yu.addExclusion(excl[0], excl[1])
             else:
+                self.wca.addExclusion(excl[0], excl[1])
                 self.ah.addExclusion(excl[0], excl[1])
                 self.yu.addExclusion(excl[0], excl[1])
 
@@ -456,16 +492,19 @@ class Sim:
         # Add Ashbaugh-Hatch
         if self.nlipids > 0:
             for sig, lam, ome in zip(comp.sigmas, comp.lambdas, comp.omegas):
-                self.ah.addParticle([sig*unit.nanometer, lam, 1])
-                self.isolf_ll.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer])
-                self.isolf_pl.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer])
+                self.wca.addParticle([sig*unit.nanometer])
+                self.ah_pp.addParticle([sig*unit.nanometer, lam, 1])
+                self.ah.addParticle([sig*unit.nanometer, lam])
+                self.sa.addParticle([sig*unit.nanometer, lam, ome*unit.nanometer])
             # Add Debye-Huckel
             for q in comp.qs:
-                self.yu_pp.addParticle([q])
-                self.yu_ll.addParticle([q])
-                self.yu_pl.addParticle([q])
+                self.yu.addParticle([q])
+                #self.yu_pp.addParticle([q])
+                #self.yu_ll.addParticle([q])
+                #self.yu_pl.addParticle([q])
         else:
             for sig, lam in zip(comp.sigmas, comp.lambdas):
+                self.wca.addParticle([sig*unit.nanometer])
                 if comp.molecule_type == 'crowder':
                     self.ah.addParticle([sig*unit.nanometer, lam, -1])
                 else: # protein, RNA
@@ -766,11 +805,11 @@ class Sim:
         simulation.reporters.append(app.dcdreporter.DCDReporter(f'{self.path}/{self.sysname:s}.dcd',self.wfreq,append=append))
         simulation.reporters.append(app.statedatareporter.StateDataReporter(f'{self.path}/{self.sysname}.log',self.logfreq,
                 step=True,speed=True,elapsedTime=True,potentialEnergy=self.report_potential_energy,separator='\t',append=append))
-        if self.nlipids > 0 and self.report_potential_energy:
-            simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ah_pp.log', self.logfreq, group=0, append=append))
-            simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_yu_pp.log', self.logfreq, group=1, append=append))
+        #if self.nlipids > 0 and self.report_potential_energy:
+            #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ah_pp.log', self.logfreq, group=0, append=append))
+             #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_yu_pp.log', self.logfreq, group=1, append=append))
             #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ll.log', self.logfreq, group=2, append=append))
-            simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_pl.log', self.logfreq, group=3, append=append))
+            #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_pl.log', self.logfreq, group=3, append=append))
 
         print("STARTING SIMULATION", flush=True)
         if self.runtime > 0: # in hours

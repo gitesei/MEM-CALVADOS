@@ -23,13 +23,28 @@ def init_bonded_interactions():
 
     return hb
 
-def init_ah_interactions(eps,rc,fixed_lambda):
-    """ Define Ashbaugh-Hatch interactions. """
+def init_wca_interactions(eps, rc):
 
-    # intermolecular interactions
-    energy_expression = f'{eps}*select(step(r-2^(1/6)*s),4*l*((s/r)^12-(s/r)^6-shift),4*((s/r)^12-(s/r)^6-l*shift)+(1-l))'
-    #ah = openmm.CustomNonbondedForce(energy_expression+f'; s=0.5*(s1+s2); l=0.5*(l1+l2); shift=(0.5*(s1+s2)/{rc})^12-(0.5*(s1+s2)/{rc})^6')
-    ah = openmm.CustomNonbondedForce(energy_expression+f'; l=select((id1+id2)*step(id1+id2),0.5*(l1+l2),{fixed_lambda}); shift=(s/{rc})^12-(s/{rc})^6; s=0.5*(s1+s2)')
+    energy_expression = f'4*{eps}*((s/r)^12-(s/r)^6+0.25)*step(rmin-r)'
+    energy_expression += '; rmin=2^(1/6)*s; s=0.5*(s1+s2)'
+
+    wca = openmm.CustomNonbondedForce(energy_expression)
+
+    wca.addPerParticleParameter('s')
+
+    wca.setNonbondedMethod(openmm.CustomNonbondedForce.CutoffPeriodic)
+    wca.setCutoffDistance(rc*unit.nanometer)
+
+    return wca
+
+def init_ah_interactions(eps, rc, fixed_lambda):
+    """ Define full Ashbaugh-Hatch interactions. """
+
+    energy_expression = f'{eps}*select(step(r-rmin),4*l*((s/r)^12-(s/r)^6-shift),4*((s/r)^12-(s/r)^6-l*shift)+(1-l))'
+    energy_expression += f'; shift=(s/{rc})^12-(s/{rc})^6; rmin=2^(1/6)*s'
+    energy_expression += f'; s=0.5*(s1+s2); l=select((id1+id2)*step(id1+id2),0.5*(l1+l2),{fixed_lambda})'
+
+    ah = openmm.CustomNonbondedForce(energy_expression)
 
     ah.addPerParticleParameter('s')
     ah.addPerParticleParameter('l')
@@ -37,150 +52,42 @@ def init_ah_interactions(eps,rc,fixed_lambda):
 
     ah.setNonbondedMethod(openmm.CustomNonbondedForce.CutoffPeriodic)
     ah.setCutoffDistance(rc*unit.nanometer)
-    #ah.setForceGroup(0)
 
-    print('Ashbaugh-Hatch potential between particles with lambda=1 and sigma=0.68 at',rc*unit.nanometer,end=': ')
-    print(4*eps*((0.68/rc)**12-(0.68/rc)**6)*unit.kilojoules_per_mole)
     return ah
 
-def init_wca_interactions(eps, rc):
-    """ Define WCA (Weeks-Chandler-Andersen) interactions for lipid-lipid and lipid-protein pairs.
-    
-    WCA is a purely repulsive potential used for pairs that are not hydrophobic.
-    
-    Energy = 4*eps*lambda*((sigma/r)^12 - (sigma/r)^6) - shift  for r < 2^(1/6)*sigma
-           = 0  for r >= 2^(1/6)*sigma
-    
-    Parameters
-    ----------
-    eps : float
-        Energy scale (usually eps_lj in kJ/mol)
-    rc : float
-        Cutoff distance in nanometers
-    
-    Returns
-    -------
-    wca : openmm.CustomNonbondedForce
-        WCA force with particles added via addParticle([sigma, lambda])
-    
-    Notes
-    -----
-    Mixing rules:
-    - sigma_ij = 0.5 * (sigma_i + sigma_j)
-    - lambda_ij = sqrt(lambda_i * lambda_j)
-    """
-    
-    wca_expression = f'{eps}*select(step(r-2^(1/6)*s),0,4*l*((s/r)^12-(s/r)^6-shift))'
-    
-    wca = openmm.CustomNonbondedForce(
-        wca_expression + f'; l=sqrt(l1*l2); shift=(1.0)^12-(1.0)^6; s=0.5*(s1+s2)'
-    )
-    
-    wca.addPerParticleParameter('s')
-    wca.addPerParticleParameter('l')
-    
-    wca.setNonbondedMethod(openmm.CustomNonbondedForce.CutoffPeriodic)
-    wca.setCutoffDistance(rc*unit.nanometer)
-    
-    return wca
+def init_ah_lipid_interactions(eps,rc):
+    """ Define Ashbaugh-Hatch interactions. """
+
+    # intermolecular interactions
+    energy_expression = f'{eps}*select(step(r-rmin),4*l*((s/r)^12-(s/r)^6),4*((s/r)^12-(s/r)^6+0.25)-l)'
+    energy_expression += f'; shift=(s/{rc})^12-(s/{rc})^6; rmin=2^(1/6)*s'
+    energy_expression += '; s=0.5*(s1+s2); l=sqrt(l1*l2)'
+    ah = openmm.CustomNonbondedForce(energy_expression)
+
+    ah.addPerParticleParameter('s')
+    ah.addPerParticleParameter('l')
+
+    ah.setNonbondedMethod(openmm.CustomNonbondedForce.CutoffPeriodic)
+    ah.setCutoffDistance(rc*unit.nanometer)
+
+    return ah
 
 def init_sa_interactions(eps, rc):
-    """ Define SA (Surface-Active) interactions for lipid-lipid and lipid-protein pairs.
-    
-    SA is an attractive potential for hydrophobic residues (both omega > 0).
-    Provides a smooth potential well with cubic spline form.
-    
-    Energy = eps*lambda*select(rmin + omega - r, 3*u^2 - 2*u^3 - 1, 0)
-    where u = (r - rmin) / omega, rmin = 2^(1/6)*sigma
-    
-    Parameters
-    ----------
-    eps : float
-        Energy scale (usually eps_lj in kJ/mol)
-    rc : float
-        Cutoff distance in nanometers
-    
-    Returns
-    -------
-    sa : openmm.CustomNonbondedForce
-        SA force with particles added via addParticle([sigma, lambda, omega])
-    
-    Notes
-    -----
-    Mixing rules:
-    - sigma_ij = 0.5 * (sigma_i + sigma_j)
-    - lambda_ij = sqrt(lambda_i * lambda_j)
-    - omega_ij = 0.5 * (omega_i + omega_j)  [spatial extent of potential well]
-    """
-    
-    sa_expression = f'{eps}*l*select(step(rmin+o-r),3*u^2-2*u^3-1,0)'
-    
-    sa = openmm.CustomNonbondedForce(
-        sa_expression + f'; l=sqrt(l1*l2); u=(r-rmin)/o; rmin=2^(1/6)*s; s=0.5*(s1+s2); o=0.5*(o1+o2)'
-    )
-    
+
+    energy_expression = f'{eps}*select(step(r-rmin),l*(3*u^2-2*u^3-1)*step(rmin+o-r),4*((s/r)^12-(s/r)^6+0.25)-l)'
+    energy_expression += '; u=(r-rmin)/o; rmin=2^(1/6)*s'
+    energy_expression += '; s=0.5*(s1+s2); l=sqrt(l1*l2); o=0.5*(o1+o2)'
+
+    sa = openmm.CustomNonbondedForce(energy_expression)
+
     sa.addPerParticleParameter('s')
     sa.addPerParticleParameter('l')
     sa.addPerParticleParameter('o')
-    
+
     sa.setNonbondedMethod(openmm.CustomNonbondedForce.CutoffPeriodic)
     sa.setCutoffDistance(rc*unit.nanometer)
-    
-    return sa
 
-def classify_lipid_interactions(lipid_indices, omegas):
-    """ Classify lipid-lipid and lipid-protein interactions based on omega values.
-    
-    Uses the omega-based classification from iSoLF to partition pairs into three groups:
-    - SA (Surface-Active): both omegas positive → attractive well
-    - AH (Ashbaugh-Hatch): omega sum <= -3 → stronger attractive interaction
-    - WCA (Weeks-Chandler-Andersen): default → repulsive only
-    
-    Parameters
-    ----------
-    lipid_indices : set or list
-        Global particle indices of all lipid beads
-    omegas : array-like
-        Omega values for all particles indexed by particle index.
-        Particles not in lipid_indices should have omegas[i] <= -3 (treated as AH).
-    
-    Returns
-    -------
-    sa_pairs : list of (i, j) tuples
-        Pairs with both omega_i > 0 and omega_j > 0
-    ah_pairs : list of (i, j) tuples
-        Pairs with omega_i + omega_j <= -3 (and not both omegas > 0)
-    wca_pairs : list of (i, j) tuples
-        All other pairs
-    
-    Notes
-    -----
-    Each pair appears exactly once (i < j to avoid duplicates).
-    Both intra-lipid and lipid-protein pairs are classified.
-    """
-    sa_pairs = []
-    ah_pairs = []
-    wca_pairs = []
-    
-    lipid_indices_set = set(lipid_indices)
-    
-    # Only consider pairs where at least one particle is a lipid
-    for i in lipid_indices_set:
-        for j in range(i + 1, len(omegas)):  # j > i to avoid duplicates
-            omega_i = omegas[i]
-            omega_j = omegas[j]
-            
-            # SA: both omegas positive
-            if omega_i > 0 and omega_j > 0:
-                sa_pairs.append((i, j))
-            # AH: sum of omegas <= -3
-            elif omega_i + omega_j <= -3:
-                ah_pairs.append((i, j))
-            # WCA: default
-            else:
-                wca_pairs.append((i, j))
-    
-    return sa_pairs, ah_pairs, wca_pairs
+    return sa
 
 def init_yu_interactions(eps, k, rc):
     """ Define Yukawa interactions. """
@@ -314,13 +221,7 @@ def init_cosine_interactions(eps):
     return cosine
 
 def init_isolf_interactions(eps,rc):
-    """ Define interactions between lipids (iSoLF lipid model, DOI: https://doi.org/10.1063/5.0160417).
-    
-    **DEPRECATED:** Use init_wca_interactions(), init_sa_interactions(), and classify_lipid_interactions()
-    instead for better OpenMM performance via interaction group partitioning.
-    
-    This function is kept for backward compatibility but should not be used in new code.
-    """
+    """ Define interactions between lipids (iSoLF lipid model, DOI: https://doi.org/10.1063/5.0160417). """
     isolf_expression = f'{eps}*select(step(r-rmin),l*select(step(o1)*step(o2),step(rmin+o-r)*(3*u^2-2*u^3-1),is_lj*4*uLJ),4*(uLJ+1/4)-select(step(o1)*step(o2),l,is_lj*l))'
     isolf = openmm.CustomNonbondedForce(isolf_expression+'; is_lj=step(-3-o1-o2); l=sqrt(l1*l2); u=(r-rmin)/o; uLJ=(s/r)^12-(s/r)^6; rmin=2^(1/6)*s; s=0.5*(s1+s2); o=0.5*(o1+o2)')
     isolf.addPerParticleParameter('s')
@@ -342,3 +243,4 @@ def init_charge_nonpolar_interactions(eps,rc):
     cn.setCutoffDistance(rc*unit.nanometer)
     cn.setForceGroup(1)
     return cn
+
