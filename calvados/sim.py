@@ -230,7 +230,10 @@ class Sim:
                 if comp.molecule_type in ['protein','crowder','cyclic','seastar','ptm_protein']:
                     xs = self.place_molecule(comp)
                 elif comp.molecule_type in ['lipid']:
-                    xs = self.place_bilayer(comp)
+                    if self.topol == 'random':
+                        xs = self.place_molecule(comp)
+                    else:
+                        xs = self.place_bilayer(comp)
                 elif comp.molecule_type == 'rna':
                     xs = self.place_molecule(comp)
                 elif comp.molecule_type == 'lj_particle':

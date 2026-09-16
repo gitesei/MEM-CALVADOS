@@ -903,27 +903,94 @@ def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},sta
     for chain_name in chain_prop.keys():
         np.save(output_path+f'/{sysname:s}_{chain_name:s}_com_profiles.npy',{k: chain_prop[chain_name][k] for k in keys})
 
+def calc_chain_pair_cmaps(u,chain_pairs,cmap_cutoff):
+    cmap = np.zeros((len(chain_pairs[0][0].atoms), len(chain_pairs[0][1].atoms)))
+    n_contacts_t = []
+    for ts in u.trajectory:
+        frame_cmap = np.zeros_like(cmap)
+        for seg1, seg2 in chain_pairs:
+            frame_cmap += calc_cmap(seg1.atoms, seg2.atoms, cmap_cutoff)
+        cmap += frame_cmap
+        n_contacts_t.append(np.sum(frame_cmap) / len(chain_pairs))
+    cmap /= len(u.trajectory) * len(chain_pairs)
+    return cmap, np.array(n_contacts_t)
+
 def cmap_chain_pairs(path,sysname,output_path,chainid_dict,input_pdb="top.pdb",cmap_cutoff=1.0):
+    u = mda.Universe(f"{path}/{input_pdb}", f"{path}/traj.dcd")
+    for key1, key2 in combinations(chainid_dict.keys(), 2):
+        segs_1 = u.segments[chainid_dict[key1][0]:chainid_dict[key1][1] + 1]
+        segs_2 = u.segments[chainid_dict[key2][0]:chainid_dict[key2][1] + 1]
+        chain_pairs = [(seg1,seg2) for seg1 in segs_1 for seg2 in segs_2]
+        cmap, n_contacts_t = calc_chain_pair_cmaps(u,chain_pairs,cmap_cutoff)
+        np.save(output_path+f"/{sysname}_{key1}_{key2}_cmap.npy", cmap)
+        np.save(output_path+f"/{sysname}_{key1}_{key2}_contacts.npy", n_contacts_t)
+    for key in chainid_dict.keys():
+        segs = u.segments[chainid_dict[key][0]:chainid_dict[key][1] + 1]
+        if len(segs) < 2:
+            continue
+        chain_pairs = list(combinations(segs, 2))
+        cmap, n_contacts_t = calc_chain_pair_cmaps(u,chain_pairs,cmap_cutoff)
+        np.save(output_path+f"/{sysname}_{key}_{key}_cmap.npy", cmap)
+        np.save(output_path+f"/{sysname}_{key}_{key}_contacts.npy", n_contacts_t)
+
+def count_bridging_chains(path, sysname, output_path, chainid_dict,
+                          bridge_key, input_pdb="top.pdb", cmap_cutoff=1.0):
 
     u = mda.Universe(f"{path}/{input_pdb}", f"{path}/traj.dcd")
-    n_frames = len(u.trajectory)
+    u_com = mda.Universe(f"{output_path}/{sysname}_com_top.pdb", 
+                         f"{output_path}/{sysname}_com_traj.dcd")
 
-    for key1, key2 in combinations(chainid_dict.keys(), 2):
-        ag_1 = u.segments[chainid_dict[key1][0]:chainid_dict[key1][1] + 1].atoms
-        ag_2 = u.segments[chainid_dict[key2][0]:chainid_dict[key2][1] + 1].atoms
+    other_keys = [key for key in chainid_dict if key != bridge_key]
+    if len(chainid_dict) != 3 or len(other_keys) != 2:
+        raise ValueError("chainid_dict must contain exactly three chain types.")
 
-        cmap = np.zeros((len(ag_1), len(ag_2)))
-        n_contacts_t = []
+    key_b, key_c = other_keys
 
-        for ts in u.trajectory:
-            frame_cmap = calc_cmap(ag_1, ag_2, cmap_cutoff)
-            cmap += frame_cmap
-            n_contacts_t.append(np.sum(frame_cmap))
+    def get_chains(key):
+        start, stop = chainid_dict[key]
+        return [u.segments[i].atoms for i in range(start, stop + 1)]
 
-        cmap /= n_frames
+    def get_com_indices(key):
+        start, stop = chainid_dict[key]
+        return list(range(start, stop + 1))
 
-        np.save(output_path+f"/{sysname}_{key1}_{key2}_cmap.npy", cmap)
-        np.save(output_path+f"/{sysname}_{key1}_{key2}_contacts.npy", np.array(n_contacts_t))
+    chains_a = get_chains(bridge_key)
+    chains_b = get_chains(key_b)
+    chains_c = get_chains(key_c)
+    
+    com_indices_a = get_com_indices(bridge_key)
+
+    n_bridging_t = []
+    fraction_bridging_t = []
+    bridge_matrix = np.zeros((len(u.trajectory), len(chains_a)), dtype=bool)
+
+    for frame, ts in enumerate(u.trajectory):
+        u_com.trajectory[frame]  # Sync COM universe to same frame
+        
+        for i, chain_a in enumerate(chains_a):
+            # Get COM z-component for this chain_a
+            com_z = u_com.atoms[com_indices_a[i]].position[2]
+            
+            # Only count contacts if z < 0
+            if com_z < 0:
+                contacts_b = any(np.any(calc_cmap(chain_a, chain_b, cmap_cutoff))
+                                 for chain_b in chains_b)
+
+                contacts_c = any(np.any(calc_cmap(chain_a, chain_c, cmap_cutoff))
+                                 for chain_c in chains_c)
+
+                bridge_matrix[frame, i] = contacts_b and contacts_c
+            else:
+                bridge_matrix[frame, i] = False
+
+        n_bridging_t.append(bridge_matrix[frame].sum())
+        fraction_bridging_t.append(bridge_matrix[frame].mean())
+
+    prefix = f"{output_path}/{sysname}_{bridge_key}_bridging_{key_b}_{key_c}"
+
+    np.save(f"{prefix}_matrix.npy", bridge_matrix)
+    np.save(f"{prefix}_count.npy", np.asarray(n_bridging_t))
+    np.save(f"{prefix}_fraction.npy", np.asarray(fraction_bridging_t))
 
 def cmap_selection(path, sysname, output_path, indexrange_dict, input_pdb="top.pdb", cmap_cutoff=1.0, binary=False):
 
@@ -1158,7 +1225,7 @@ def calc_bilayer_prop(path,sysname,output_path,input_pdb='top.pdb'):
     z = edges[:-1] + dz
 
     t_pho = traj.atom_slice(traj.top.select('resname PHO'))
-    h_pho = np.apply_along_axis(lambda a: np.histogram(a,bins=edges/10)[0], 1, t_pho.xyz[:,:,2])/area.mean()
+    h_pho = np.apply_along_axis(lambda a: np.histogram(a,bins=edges/10)[0], 1, t_pho.xyz[:,:,2]) / area[:, None]
 
     d_pho_pho = np.empty(0)
     for h in h_pho:
@@ -1192,6 +1259,7 @@ def calc_membrane_profiles(
     residues_file,
     tmd_sel,
     start=0,
+    stop=-1,
     ref_sel="resname TDO or resname TPO",
     strip_sel="not (resname CHO or resname PHO or resname MID or resname TDO or resname TPO)",
 ):
@@ -1262,7 +1330,7 @@ def calc_membrane_profiles(
 
     centered_all = f"{path}/traj.dcd"
     with mda.Writer(centered_all, all_ag.n_atoms) as W:
-        for ts in u.trajectory[start:]:
+        for ts in u.trajectory[start:stop]:
             W.write(all_ag)
 
     u_prot = mda.Universe(f"{path}/top.pdb", centered_all)
