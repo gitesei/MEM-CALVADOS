@@ -265,24 +265,26 @@ class Sim:
                     self.add_ext_restraints(comp)
 
         if self.nlipids > 0:
-            protein_ltt = protein_indices & omega_ltt_indices
-            protein_gly = protein_indices & omega_mid_indices
-            protein_htt = protein_indices & omega_htt_indices
             lipid_ser = lipid_indices & omega_ltt_indices
             lipid_lhd = lipid_indices & omega_lhd_indices
             lipid_mid = lipid_indices & omega_mid_indices
             lipid_ltl = lipid_indices & omega_htt_indices
-            self.wca.addInteractionGroup(protein_ltt | lipid_ser, lipid_ltl | lipid_mid)
-            self.wca.addInteractionGroup(protein_htt, lipid_ser | lipid_lhd | lipid_mid)
-            self.wca.addInteractionGroup(protein_gly, lipid_indices)
+
+            self.wca.addInteractionGroup(lipid_ser, lipid_ltl | lipid_mid)
             self.wca.addInteractionGroup(lipid_lhd | lipid_mid, lipid_ltl | lipid_lhd | lipid_mid)
             self.wca.setForceGroup(0)
+
             self.ah_pp.addInteractionGroup(protein_indices, protein_indices)
             self.ah_pp.setForceGroup(1)
-            self.ah.addInteractionGroup(lipid_ser | protein_ltt, lipid_lhd | lipid_ser)
+
+            self.ah.addInteractionGroup(lipid_ser, lipid_lhd | lipid_ser)
+            self.ah.addInteractionGroup(protein_indices, lipid_ser | lipid_lhd | lipid_mid)
             self.ah.setForceGroup(1)
-            self.sa.addInteractionGroup(lipid_ltl | protein_htt, lipid_ltl)
+
+            self.sa.addInteractionGroup(protein_indices, lipid_ltl)
+            self.sa.addInteractionGroup(lipid_ltl, lipid_ltl)
             self.sa.setForceGroup(2)
+
             self.yu.addInteractionGroup(charged_indices, charged_indices)
             self.yu.setForceGroup(3)
         else:
