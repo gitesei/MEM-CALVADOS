@@ -1193,11 +1193,74 @@ def calc_contact_map(path,sysname,output_path,chainid_dict={},is_slab=False,inpu
     # save energy and contact maps
     np.save(output_path+f'/{sysname:s}_{name_1:s}_{name_2:s}_cmap.npy',cmap)
 
-def calc_bilayer_prop(path,sysname,output_path,input_pdb='top.pdb'):
+def calc_bilayer_prop(path,sysname,output_path,residues_file,start=0,
+        ref_sel="resname TDO or resname TPO",input_pdb='top.pdb'):
     """
     Calculate bilayer properties.
 
     """
+    df_residues = pd.read_csv(residues_file, index_col=0)
+    three_to_one = dict(zip(df_residues["three"].values, df_residues.index.values))
+    u = mda.Universe(f"{path}/top.pdb", f"{path}/{sysname}.dcd")
+
+    ref = u.select_atoms(ref_sel)
+    all_ag = u.atoms
+
+    seq = [three_to_one[res.resname] if len(res.resname)==3 else res.resname for res in u.residues]
+    masses = get_masses(seq, df_residues, charge_termini=True)
+    u.add_TopologyAttr("masses", masses)
+
+    bonds = []
+    for seg in u.segments:
+        idx = seg.atoms.indices
+        bonds += [(int(i), int(j)) for i, j in zip(idx[:-1], idx[1:])]
+    u.add_TopologyAttr("bonds", bonds)
+
+    def calc_zpatch(z,h):
+        cutoff = 0
+        ct = 0.
+        ct_max = 0.
+        zwindow = []
+        hwindow = []
+        zpatch = []
+        hpatch = []
+        for ix, x in enumerate(h):
+            if x > cutoff:
+                ct += x
+                zwindow.append(z[ix])
+                hwindow.append(x)
+            else:
+                if ct > ct_max:
+                    ct_max = ct
+                    zpatch = zwindow
+                    hpatch = hwindow
+                ct = 0.
+                zwindow = []
+                hwindow = []
+        zpatch = np.array(zpatch)
+        hpatch = np.array(hpatch)
+        return zpatch, hpatch
+
+    def center_membrane(ts):
+        Lx, Ly, Lz = ts.dimensions[:3]
+
+        edges = np.arange(0.0, Lz + 1.0, 1.0)
+        z = edges[:-1] + 0.5
+        h, _ = np.histogram(ref.positions[:, 2] % Lz, bins=edges)
+        zpatch, hpatch = calc_zpatch(z, h)
+        zmid = np.average(zpatch, weights=hpatch)
+
+        all_ag.translate(np.array([0.0, 0.0, -zmid + 0.5 * Lz]))
+        transformations.wrap(all_ag, compound="segments")(ts)
+        return ts
+
+    u.trajectory.add_transformations(center_membrane)
+
+    centered_all = f"{path}/traj.dcd"
+    with mda.Writer(centered_all, all_ag.n_atoms) as W:
+        for ts in u.trajectory[start:]:
+            W.write(all_ag)
+
     traj = md.load_dcd(f'{path:s}/traj.dcd',top=f'{path:s}/'+input_pdb)
 
     # area per lipid
@@ -1252,17 +1315,9 @@ def calc_bilayer_prop(path,sysname,output_path,input_pdb='top.pdb'):
     df_analysis.loc['order','error'] = block_order.sem
     df_analysis.to_csv(output_path+f'/{sysname:s}_bilayer_prop.csv')
 
-def calc_membrane_profiles(
-    path,
-    sysname,
-    output_path,
-    residues_file,
-    tmd_sel,
-    start=0,
-    stop=-1,
-    ref_sel="resname TDO or resname TPO",
-    strip_sel="not (resname CHO or resname PHO or resname MID or resname TDO or resname TPO)",
-):
+def calc_membrane_profiles(path,sysname,output_path,residues_file,tmd_sel,
+        start=0,stop=-1,ref_sel="resname TDO or resname TPO",
+        strip_sel="not (resname CHO or resname PHO or resname MID or resname TDO or resname TPO)"):
     df_residues = pd.read_csv(residues_file, index_col=0)
     three_to_one = dict(zip(df_residues["three"].values, df_residues.index.values))
     u = mda.Universe(f"{path}/top.pdb", f"{path}/{sysname}.dcd")
