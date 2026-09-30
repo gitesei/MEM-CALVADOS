@@ -76,7 +76,7 @@ def init_sa_interactions(eps, rc):
 
     energy_expression = f'{eps}*select(step(r-rmin),l*(3*u^2-2*u^3-1)*step(rmin+o-r),4*((s/r)^12-(s/r)^6+0.25)-l)'
     energy_expression += '; u=(r-rmin)/o; rmin=2^(1/6)*s'
-    energy_expression += '; s=0.5*(s1+s2); l=sqrt(l1*l2); o=0.5*(o1+o2)'
+    energy_expression += '; s=0.5*(s1+s2); l=sqrt(l1*l2); o=sqrt(o1*o2)'
 
     sa = openmm.CustomNonbondedForce(energy_expression)
 
