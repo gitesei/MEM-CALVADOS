@@ -273,8 +273,7 @@ class Sim:
             protein_pos = protein_indices & tmt_pos_indices
 
             self.wca.addInteractionGroup(lipid_ser, lipid_ltl | lipid_mid)
-            self.wca.addInteractionGroup(protein_pos, lipid_ltl | lipid_mid | lipid_chd)
-            self.wca.addInteractionGroup(lipid_chd | lipid_mid, lipid_ltl | lipid_chd | lipid_mid | protein_neg)
+            self.wca.addInteractionGroup(protein_indices | lipid_ltl | lipid_chd | lipid_mid, lipid_mid | lipid_chd)
             self.wca.setForceGroup(0)
 
             self.ah_pp.addInteractionGroup(protein_indices, protein_indices)
