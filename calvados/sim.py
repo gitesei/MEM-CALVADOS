@@ -210,10 +210,10 @@ class Sim:
 
         protein_indices = set()
         lipid_indices = set()
-        omega_ltt_indices = set()
-        omega_lhd_indices  = set()
-        omega_htt_indices = set()
-        omega_mid_indices = set()
+        tmt_pos_indices = set() # positive TMT
+        tmt_neg_indices = set() # negative TMT
+        tmt_chd_indices = set() # CHO and PHO, charged heads
+        tmt_mid_indices = set() # MID
         charged_indices = set()
         current_index = 0
 
@@ -246,16 +246,16 @@ class Sim:
                     if comp.molecule_type in ['protein']:
                          protein_indices.add(current_index)
 
-                    omega = comp.omegas[bead]
+                    tmt = comp.tmt[bead]
                     charge = comp.qs[bead]
-                    if np.isclose(omega, -2.0):
-                        omega_ltt_indices.add(current_index)
-                    elif np.isclose(omega, -1.0):
-                        omega_lhd_indices.add(current_index)
-                    elif np.isclose(omega, -0.5):
-                        omega_mid_indices.add(current_index)
-                    elif omega > 0:
-                        omega_htt_indices.add(current_index)
+                    if tmt < -5:
+                        tmt_mid_indices.add(current_index)
+                    elif tmt < -4:
+                        tmt_chd_indices.add(current_index)
+                    elif tmt < 0:
+                        tmt_neg_indices.add(current_index)
+                    elif tmt > 0:
+                        tmt_pos_indices.add(current_index)
                     if not np.isclose(charge, 0.0):
                         charged_indices.add(current_index)
                     current_index += 1
@@ -265,20 +265,22 @@ class Sim:
                     self.add_ext_restraints(comp)
 
         if self.nlipids > 0:
-            lipid_ser = lipid_indices & omega_ltt_indices
-            lipid_lhd = lipid_indices & omega_lhd_indices
-            lipid_mid = lipid_indices & omega_mid_indices
-            lipid_ltl = lipid_indices & omega_htt_indices
+            lipid_ser = lipid_indices & tmt_neg_indices
+            lipid_chd = lipid_indices & tmt_chd_indices
+            lipid_mid = lipid_indices & tmt_mid_indices
+            lipid_ltl = lipid_indices & tmt_pos_indices
+            protein_neg = protein_indices & tmt_neg_indices
+            protein_pos = protein_indices & tmt_pos_indices
 
             self.wca.addInteractionGroup(lipid_ser, lipid_ltl | lipid_mid)
-            self.wca.addInteractionGroup(lipid_lhd | lipid_mid, lipid_ltl | lipid_lhd | lipid_mid)
+            self.wca.addInteractionGroup(protein_pos, lipid_ltl | lipid_mid | lipid_chd)
+            self.wca.addInteractionGroup(lipid_chd | lipid_mid, lipid_ltl | lipid_chd | lipid_mid | protein_neg)
             self.wca.setForceGroup(0)
 
             self.ah_pp.addInteractionGroup(protein_indices, protein_indices)
             self.ah_pp.setForceGroup(1)
 
-            self.ah.addInteractionGroup(lipid_ser, lipid_lhd | lipid_ser)
-            self.ah.addInteractionGroup(protein_indices, lipid_ser | lipid_lhd | lipid_mid)
+            self.ah.addInteractionGroup(lipid_ser, lipid_chd | lipid_ser | protein_indices)
             self.ah.setForceGroup(1)
 
             self.sa.addInteractionGroup(protein_indices, lipid_ltl)
