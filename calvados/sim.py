@@ -282,8 +282,7 @@ class Sim:
             self.ah.addInteractionGroup(lipid_ser, lipid_chd | lipid_ser | protein_indices)
             self.ah.setForceGroup(1)
 
-            self.sa.addInteractionGroup(protein_indices, lipid_ltl)
-            self.sa.addInteractionGroup(lipid_ltl, lipid_ltl)
+            self.sa.addInteractionGroup(protein_indices | lipid_ltl, lipid_ltl)
             self.sa.setForceGroup(2)
 
             self.yu.addInteractionGroup(charged_indices, charged_indices)

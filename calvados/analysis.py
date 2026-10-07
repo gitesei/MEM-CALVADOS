@@ -1239,6 +1239,10 @@ def calc_bilayer_prop(path,sysname,output_path,residues_file,start=0,
                 hwindow = []
         zpatch = np.array(zpatch)
         hpatch = np.array(hpatch)
+        # catch a patch that reaches the last histogram bin
+        if ct > ct_max:
+            zpatch = zwindow
+            hpatch = hwindow
         return zpatch, hpatch
 
     def center_membrane(ts):
@@ -1360,6 +1364,10 @@ def calc_membrane_profiles(path,sysname,output_path,residues_file,tmd_sel,
                 hwindow = []
         zpatch = np.array(zpatch)
         hpatch = np.array(hpatch)
+        # catch a patch that reaches the last histogram bin
+        if ct > ct_max:
+            zpatch = zwindow
+            hpatch = hwindow
         return zpatch, hpatch
 
     def center_membrane_and_tmd(ts):
