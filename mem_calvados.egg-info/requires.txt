@@ -1,0 +1,12 @@
+numpy
+pandas
+biopython
+Jinja2
+tqdm
+matplotlib
+PyYAML
+statsmodels
+localcider
+pytest
+numba
+scipy

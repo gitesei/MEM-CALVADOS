@@ -253,6 +253,13 @@ class Sim:
             self.map_custom_restraints()
             self.add_custom_restraints()
 
+        if self.pmf_force:
+            u = np.load(self.fpmf)
+            self.pmf = interactions.init_pmf_force(u, self.box[2])
+            g_pep = self.pmf.addGroup(sorted(protein_indices))
+            g_lip = self.pmf.addGroup(sorted(lipid_indices))
+            self.pmf.addBond([g_pep, g_lip], [])
+
         self.pdb_cg = f'{self.path}/top.pdb'
         a = md.Trajectory(self.pos, self.top, 0, self.box, [90,90,90])
         if self.restart != 'pdb': # only save new topology if no system pdb is given
@@ -297,6 +304,9 @@ class Sim:
         if self.custom_restraints:
             self.system.addForce(self.cres)
             print(f'Number of custom restraints: {self.cres.getNumBonds()}')
+
+        if self.pmf_force:
+            self.system.addForce(self.pmf)
 
         # Barostat force
         if self.box_eq:
@@ -771,6 +781,7 @@ class Sim:
             simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_yu_pp.log', self.logfreq, group=1, append=append))
             #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ll.log', self.logfreq, group=2, append=append))
             simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_pl.log', self.logfreq, group=3, append=append))
+
 
         print("STARTING SIMULATION", flush=True)
         if self.runtime > 0: # in hours

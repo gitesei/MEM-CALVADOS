@@ -43,42 +43,42 @@ def init_ah_interactions(eps,rc,fixed_lambda):
 
 def init_wca_interactions(eps, rc):
     """ WCA (Weeks-Chandler-Andersen) potential: purely repulsive for lipid-lipid/protein pairs. """
-    
+
     wca_expression = f'{eps}*select(step(r-2^(1/6)*s),0,4*l*((s/r)^12-(s/r)^6-shift))'
-    
+
     wca = openmm.CustomNonbondedForce(
         wca_expression + f'; l=sqrt(l1*l2); shift=(1.0)^12-(1.0)^6; s=0.5*(s1+s2)'
     )
-    
+
     wca.addPerParticleParameter('s')
     wca.addPerParticleParameter('l')
-    
+
     wca.setNonbondedMethod(openmm.CustomNonbondedForce.CutoffPeriodic)
     wca.setCutoffDistance(rc*unit.nanometer)
-    
+
     return wca
 
 def init_sa_interactions(eps, rc):
     """ SA (Surface-Active) potential: attractive well for hydrophobic pairs (both omega > 0). """
-    
+
     sa_expression = f'{eps}*l*select(step(rmin+o-r),3*u^2-2*u^3-1,0)'
-    
+
     sa = openmm.CustomNonbondedForce(
         sa_expression + f'; l=sqrt(l1*l2); u=(r-rmin)/o; rmin=2^(1/6)*s; s=0.5*(s1+s2); o=0.5*(o1+o2)'
     )
-    
+
     sa.addPerParticleParameter('s')
     sa.addPerParticleParameter('l')
     sa.addPerParticleParameter('o')
-    
+
     sa.setNonbondedMethod(openmm.CustomNonbondedForce.CutoffPeriodic)
     sa.setCutoffDistance(rc*unit.nanometer)
-    
+
     return sa
 
 def classify_lipid_interactions(lipid_indices, omegas):
     """ Classify lipid-lipid and lipid-protein interactions based on omega values.
-    
+
     Partitions pairs into:
     - SA: both omega > 0
     - AH: omega_i + omega_j <= -3
@@ -87,21 +87,21 @@ def classify_lipid_interactions(lipid_indices, omegas):
     sa_pairs = []
     ah_pairs = []
     wca_pairs = []
-    
+
     lipid_indices_set = set(lipid_indices)
-    
+
     for i in lipid_indices_set:
         for j in range(i + 1, len(omegas)):
             omega_i = omegas[i]
             omega_j = omegas[j]
-            
+
             if omega_i > 0 and omega_j > 0:
                 sa_pairs.append((i, j))
             elif omega_i + omega_j <= -3:
                 ah_pairs.append((i, j))
             else:
                 wca_pairs.append((i, j))
-    
+
     return sa_pairs, ah_pairs, wca_pairs
 
 def init_yu_interactions(eps, k, rc):
@@ -140,6 +140,14 @@ def init_restraints(restraint_type):
         cs.addPerBondParameter('k')
     cs.setUsesPeriodicBoundaryConditions(True)
     return cs
+
+def init_pmf_force(u, Lz):
+    """ Tabulated bias u(z) = RT ln P(z) on the wrapped z-distance between two centroid groups (peptide, lipids). """
+    table = openmm.Continuous1DFunction(list(map(float, u)), -Lz/2., Lz/2., True)
+    f = openmm.CustomCentroidBondForce(2, f'pmf(dz); dz=z1-z2')
+    f.addTabulatedFunction('pmf', table)
+    f.setUsesPeriodicBoundaryConditions(True)
+    return f
 
 def init_scaled_LJ(eps_lj,cutoff_lj):
     """ Initialize restraints. """
