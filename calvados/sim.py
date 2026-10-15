@@ -156,12 +156,12 @@ class Sim:
         self.make_components()
         self.count_components()
 
-        self.cutoff_wca = 2**(1/6) * max(np.max(comp.sigmas) for comp in self.components)
-        self.cutoff_sa = max(2**(1/6) * sig + ome for comp in self.components
-            for sig, ome in zip(comp.sigmas, comp.omegas) if ome > 0)
 
         # init interactions
         if self.nlipids > 0:
+            self.cutoff_wca = 2**(1/6) * max(np.max(comp.sigmas) for comp in self.components)
+            self.cutoff_sa = max(2**(1/6) * sig + ome for comp in self.components
+                for sig, ome in zip(comp.sigmas, comp.omegas) if ome > 0)
             self.wca = interactions.init_wca_interactions(self.eps_lj,self.cutoff_wca)
             #self.wca_pl = interactions.init_wca_interactions(self.eps_lj, self.cutoff_wca)
             self.ah_pp = interactions.init_ah_interactions(self.eps_lj,self.cutoff_lj,self.fixed_lambda)
@@ -246,18 +246,19 @@ class Sim:
                     if comp.molecule_type in ['protein']:
                          protein_indices.add(current_index)
 
-                    tmt = comp.tmt[bead]
-                    charge = comp.qs[bead]
-                    if tmt < -5:
-                        tmt_mid_indices.add(current_index)
-                    elif tmt < -4:
-                        tmt_chd_indices.add(current_index)
-                    elif tmt < 0:
-                        tmt_neg_indices.add(current_index)
-                    elif tmt > 0:
-                        tmt_pos_indices.add(current_index)
-                    if not np.isclose(charge, 0.0):
-                        charged_indices.add(current_index)
+                    if self.nlipids > 0:
+                        tmt = comp.tmt[bead]
+                        charge = comp.qs[bead]
+                        if tmt < -5:
+                            tmt_mid_indices.add(current_index)
+                        elif tmt < -4:
+                            tmt_chd_indices.add(current_index)
+                        elif tmt < 0:
+                            tmt_neg_indices.add(current_index)
+                        elif tmt > 0:
+                            tmt_pos_indices.add(current_index)
+                        if not np.isclose(charge, 0.0):
+                            charged_indices.add(current_index)
                     current_index += 1
 
                 # add restraints towards box center
@@ -288,9 +289,8 @@ class Sim:
             self.yu.addInteractionGroup(charged_indices, charged_indices)
             self.yu.setForceGroup(3)
         else:
-            self.wca.setForceGroup(0)
-            self.ah.setForceGroup(1)
-            self.yu.setForceGroup(2)
+            self.ah.setForceGroup(0)
+            self.yu.setForceGroup(1)
 
         if self.custom_restraints:
             self.map_custom_restraints()
@@ -315,7 +315,7 @@ class Sim:
             for force in [self.wca,self.ah_pp,self.ah,self.sa,self.yu]:
                 self.system.addForce(force)
         elif self.nproteins + self.nrnas + self.ncrowders != 0:
-            for force in [self.wca,self.yu, self.ah]:
+            for force in [self.ah, self.yu]:
                 self.system.addForce(force)
         else:
             self.system.addForce(self.ah)
@@ -483,7 +483,6 @@ class Sim:
                 self.sa.addExclusion(excl[0], excl[1])
                 self.yu.addExclusion(excl[0], excl[1])
             else:
-                self.wca.addExclusion(excl[0], excl[1])
                 self.ah.addExclusion(excl[0], excl[1])
                 self.yu.addExclusion(excl[0], excl[1])
 
@@ -509,7 +508,6 @@ class Sim:
                 #self.yu_pl.addParticle([q])
         else:
             for sig, lam in zip(comp.sigmas, comp.lambdas):
-                self.wca.addParticle([sig*unit.nanometer])
                 if comp.molecule_type == 'crowder':
                     self.ah.addParticle([sig*unit.nanometer, lam, -1])
                 else: # protein, RNA
