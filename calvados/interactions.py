@@ -110,6 +110,13 @@ def init_angles():
     ha.setUsesPeriodicBoundaryConditions(True)
     return ha
 
+def init_pmf_force(u, Lz):
+    table = openmm.Continuous1DFunction(list(map(float, u)), -Lz/2., Lz/2., True)
+    f = openmm.CustomCentroidBondForce(2, f'pmf(dz); dz=z1-z2-{Lz}*floor((z1-z2)/{Lz}+0.5)')
+    f.addTabulatedFunction('pmf', table)
+    f.setUsesPeriodicBoundaryConditions(True)
+    return f
+
 def init_wcafene(eps_lj):
     wcafene = init_wcafene_interactions(3*eps_lj)
     return wcafene

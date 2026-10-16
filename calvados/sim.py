@@ -270,8 +270,6 @@ class Sim:
             lipid_chd = lipid_indices & tmt_chd_indices
             lipid_mid = lipid_indices & tmt_mid_indices
             lipid_ltl = lipid_indices & tmt_pos_indices
-            protein_neg = protein_indices & tmt_neg_indices
-            protein_pos = protein_indices & tmt_pos_indices
 
             self.wca.addInteractionGroup(lipid_ser, lipid_ltl | lipid_mid)
             self.wca.addInteractionGroup(protein_indices | lipid_ltl | lipid_chd | lipid_mid, lipid_mid | lipid_chd)
@@ -295,6 +293,14 @@ class Sim:
         if self.custom_restraints:
             self.map_custom_restraints()
             self.add_custom_restraints()
+
+        if self.pmf_force:
+            u = np.load(self.fpmf)
+            self.pmf = interactions.init_pmf_force(u, self.box[2])
+            g_pep = self.pmf.addGroup(sorted(protein_indices))
+            g_lip = self.pmf.addGroup(sorted(lipid_indices))
+            self.pmf.addBond([g_pep, g_lip], [])
+            print('PMF force group',self.pmf.getForceGroup())
 
         self.pdb_cg = f'{self.path}/top.pdb'
         a = md.Trajectory(self.pos, self.top, 0, self.box, [90,90,90])
@@ -360,6 +366,9 @@ class Sim:
                     openmm.openmm.MonteCarloMembraneBarostat.ZFixed, 10000)
                     #openmm.openmm.MonteCarloMembraneBarostat.ConstantVolume, 10000)
             self.system.addForce(barostat)
+
+        if self.pmf_force:
+            self.system.addForce(self.pmf)
 
     def print_system_summary(self, write_xml: bool = True):
         """ Print system information and write xml. """
@@ -626,6 +635,11 @@ class Sim:
     def simulate(self):
         """ Simulate. """
 
+        print("System uses PBC:", self.system.usesPeriodicBoundaryConditions())
+
+        for force in self.system.getForces():
+            print(force.__class__.__name__, force.usesPeriodicBoundaryConditions())
+
         fcheck_in = f'{self.path}/{self.frestart}'
         fcheck_out = f'{self.path}/restart.chk'
         append = False
@@ -652,6 +666,11 @@ class Sim:
             platform.setPropertyDefaultValue("Precision", self.gpu_precision)
             simulation = app.simulation.Simulation(pdb.topology, self.system, integrator, platform)
         print('Running on', platform.getName())
+        molecules = simulation.context.getMolecules()
+        sizes = sorted(map(len, molecules), reverse=True)
+        print("Number of molecules:", len(molecules))
+        print("Largest molecules:", sizes[:10])
+        print("System uses PBC:", simulation.system.usesPeriodicBoundaryConditions())
         for name in platform.getPropertyNames():
             value = platform.getPropertyValue(simulation.context, name)
             print(f"{name}: {value}")
