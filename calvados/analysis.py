@@ -1453,6 +1453,11 @@ def calc_domain_angles(path, sysname, output_path, angle_sels, residues_file, sa
 
         return np.append(angles, w[np.argsort(w)])
 
+    def _vector_angle_to_z(pos1, pos2):
+        v = pos2 - pos1
+        v /= np.linalg.norm(v)
+        return np.degrees(np.arccos(np.clip(v[2], -1.0, 1.0)))
+
     u = mda.Universe(f"{path}/prot_CG.pdb", f"{path}/prot_CG.dcd", in_memory=True)
     prot = u.atoms
     angle_domains = {name: u.select_atoms(sel) for name, sel in angle_sels.items()}
@@ -1478,7 +1483,10 @@ def calc_domain_angles(path, sysname, output_path, angle_sels, residues_file, sa
         M2 += delta * (dz - mean)
 
         for name, ag in angle_domains.items():
-            angles[name].append(_domain_angle_to_z(ag.positions, masses[ag.indices]))
+            if ag.size == 2:
+                angles[name].append(_vector_angle_to_z(*ag.positions))
+            else:
+                angles[name].append(_domain_angle_to_z(ag.positions, masses[ag.indices]))
 
         times.append((n-1) * saving_interval)
 
