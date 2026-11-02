@@ -192,6 +192,16 @@ def calc_cmap(domain0,domain1,cutoff=1.0):
      cmap = .5 - .5*np.tanh((dmap-cutoff)/.3)
      return(cmap)
 
+def calc_cmap_dmin(domain0, domain1, cutoff=1.0):
+    """Contact map and minimum distance for a single configuration."""
+
+    dmap = calc_dmap(domain0, domain1)
+
+    dmin = np.min(dmap)
+    cmap = 0.5 - 0.5 * np.tanh((dmap - cutoff) / 0.3)
+
+    return cmap, dmin
+
 def cmap_traj(u,domain0,domain1,cutoff=1.0,start=None,end=None,step=1):
     """ Average number of contacts along trajectory
 
@@ -905,15 +915,21 @@ def calc_com_profiles(path,sysname,output_path,residues_file,chainid_dict={},sta
 
 def calc_chain_pair_cmaps(u,chain_pairs,cmap_cutoff):
     cmap = np.zeros((len(chain_pairs[0][0].atoms), len(chain_pairs[0][1].atoms)))
+    bin_edges = np.arange(0, cmap.size + 2) - 0.5
     n_contacts_t = []
+    h_contacts_t = []
     for ts in u.trajectory:
         frame_cmap = np.zeros_like(cmap)
+        n_contacts_pair = []
         for seg1, seg2 in chain_pairs:
-            frame_cmap += calc_cmap(seg1.atoms, seg2.atoms, cmap_cutoff)
+            pair_cmap = calc_cmap(seg1.atoms, seg2.atoms, cmap_cutoff)
+            frame_cmap += pair_cmap
+            n_contacts_pair.append(pair_cmap.sum())
         cmap += frame_cmap
-        n_contacts_t.append(np.sum(frame_cmap) / len(chain_pairs))
-    cmap /= len(u.trajectory) * len(chain_pairs)
-    return cmap, np.array(n_contacts_t)
+        n_contacts_t.append(np.sum(frame_cmap))
+        h_contacts_t.append(np.histogram(n_contacts_pair, bins=bin_edges)[0])
+    cmap /= len(u.trajectory) 
+    return cmap, np.array(n_contacts_t), h_contacts_t
 
 def cmap_chain_pairs(path,sysname,output_path,chainid_dict,input_pdb="top.pdb",cmap_cutoff=1.0):
     u = mda.Universe(f"{path}/{input_pdb}", f"{path}/traj.dcd")
@@ -921,17 +937,42 @@ def cmap_chain_pairs(path,sysname,output_path,chainid_dict,input_pdb="top.pdb",c
         segs_1 = u.segments[chainid_dict[key1][0]:chainid_dict[key1][1] + 1]
         segs_2 = u.segments[chainid_dict[key2][0]:chainid_dict[key2][1] + 1]
         chain_pairs = [(seg1,seg2) for seg1 in segs_1 for seg2 in segs_2]
-        cmap, n_contacts_t = calc_chain_pair_cmaps(u,chain_pairs,cmap_cutoff)
+        cmap, n_contacts_t, h_contacts_t = calc_chain_pair_cmaps(u,chain_pairs,cmap_cutoff)
         np.save(output_path+f"/{sysname}_{key1}_{key2}_cmap.npy", cmap)
         np.save(output_path+f"/{sysname}_{key1}_{key2}_contacts.npy", n_contacts_t)
+        np.save(output_path+f"/{sysname}_{key1}_{key2}_hist.npy", np.mean(h_contacts_t,axis=0))
     for key in chainid_dict.keys():
         segs = u.segments[chainid_dict[key][0]:chainid_dict[key][1] + 1]
         if len(segs) < 2:
             continue
         chain_pairs = list(combinations(segs, 2))
-        cmap, n_contacts_t = calc_chain_pair_cmaps(u,chain_pairs,cmap_cutoff)
+        cmap, n_contacts_t, h_contacts_t = calc_chain_pair_cmaps(u,chain_pairs,cmap_cutoff)
         np.save(output_path+f"/{sysname}_{key}_{key}_cmap.npy", cmap)
         np.save(output_path+f"/{sysname}_{key}_{key}_contacts.npy", n_contacts_t)
+        np.save(output_path+f"/{sysname}_{key}_{key}_hist.npy", np.mean(h_contacts_t,axis=0))
+
+def calc_surface_density_hist(path,sysname,output_path,resid=15,input_pdb="top.pdb",
+                              bins_xy=35,saving_interval=1.0):
+    u = mda.Universe(f"{path}/{input_pdb}", f"{path}/traj.dcd")
+    anchors = u.select_atoms(f"resid {resid}")
+    rho_frames = []
+    times = []
+    for i, ts in enumerate(u.trajectory):
+        Lx, Ly = ts.dimensions[:2] / 10.0
+        xy = anchors.positions[:,:2] / 10.0
+        H, _, _ = np.histogram2d(
+            xy[:,0],xy[:,1],
+            bins=bins_xy,
+            range=[[0,Lx],[0,Ly]])
+        rho = H / ((Lx/bins_xy)*(Ly/bins_xy))
+        rho_frames.append(rho.ravel())
+        times.append(i*saving_interval)
+    rho_max = max(r.max() for r in rho_frames)
+    edges = np.arange(0,rho_max+1.5,0.5)
+    hist = np.array([np.histogram(r,bins=edges,density=True)[0] for r in rho_frames])
+    np.save(output_path+f"/{sysname}_surface_density_hist.npy",hist)
+    np.save(output_path+f"/{sysname}_surface_density_edges.npy",edges)
+    np.save(output_path+f"/{sysname}_surface_density_time.npy",np.array(times))
 
 def count_bridging_chains(path, sysname, output_path, chainid_dict,
                           bridge_key, input_pdb="top.pdb", cmap_cutoff=1.0):
@@ -1003,18 +1044,21 @@ def cmap_selection(path, sysname, output_path, indexrange_dict, input_pdb="top.p
 
         cmap = np.zeros((len(ag_1), len(ag_2)))
         n_contacts_t = []
+        dmin_t = []
 
         for ts in u.trajectory:
-            frame_cmap = calc_cmap(ag_1, ag_2, cmap_cutoff)
+            frame_cmap, frame_dmin = calc_cmap_dmin(ag_1, ag_2, cmap_cutoff)
             if binary:
                 frame_cmap = (frame_cmap > 0.5).astype(float)
             cmap += frame_cmap
             n_contacts_t.append(np.sum(frame_cmap))
+            dmin_t.append(frame_dmin)
 
         cmap /= n_frames
 
         np.save(f"{output_path}/{sysname}_{key}_cmap.npy", cmap)
         np.save(f"{output_path}/{sysname}_{key}_contacts.npy", np.array(n_contacts_t))
+        np.save(f"{output_path}/{sysname}_{key}_dmin.npy", np.array(dmin_t))
 
 def calc_com_traj(path,sysname,output_path,residues_file,chainid_dict={},start=None,end=None,step=1,input_pdb='top.pdb'):
     """
@@ -1193,7 +1237,7 @@ def calc_contact_map(path,sysname,output_path,chainid_dict={},is_slab=False,inpu
     # save energy and contact maps
     np.save(output_path+f'/{sysname:s}_{name_1:s}_{name_2:s}_cmap.npy',cmap)
 
-def calc_bilayer_prop(path,sysname,output_path,residues_file,start=0,
+def calc_bilayer_prop(path,sysname,output_path,residues_file,start=0,stop=-1,
         ref_sel="resname TDO or resname TPO",input_pdb='top.pdb'):
     """
     Calculate bilayer properties.
@@ -1262,13 +1306,14 @@ def calc_bilayer_prop(path,sysname,output_path,residues_file,start=0,
 
     centered_all = f"{path}/traj.dcd"
     with mda.Writer(centered_all, all_ag.n_atoms) as W:
-        for ts in u.trajectory[start:]:
+        for ts in u.trajectory[start:stop]:
             W.write(all_ag)
 
     traj = md.load_dcd(f'{path:s}/traj.dcd',top=f'{path:s}/'+input_pdb)
 
     # area per lipid
     area = traj.unitcell_lengths[:,0]*traj.unitcell_lengths[:,1]
+    np.save(output_path+f'/{sysname:s}_lx.npy',traj.unitcell_lengths[:, 0])
     mid_beads = traj.top.select('resname MID')
     n_lipids = mid_beads.size
     area_per_lipid = area/n_lipids*2
@@ -1483,7 +1528,7 @@ def calc_domain_angles(path, sysname, output_path, angle_sels, residues_file, sa
         M2 += delta * (dz - mean)
 
         for name, ag in angle_domains.items():
-            if ag.size == 2:
+            if ag.n_atoms == 2:
                 angles[name].append(_vector_angle_to_z(*ag.positions))
             else:
                 angles[name].append(_domain_angle_to_z(ag.positions, masses[ag.indices]))

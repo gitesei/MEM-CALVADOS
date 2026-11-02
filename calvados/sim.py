@@ -197,9 +197,10 @@ class Sim:
             self.bilayergrid = build.build_xygrid(int(self.nlipids),self.box)
             if (self.nproteins + self.nrnas) > 0:
                 if self.topol == 'shift_ref_bead':
-                    self.xyzgrid = build.build_xyzgrid(self.nproteins+self.nrnas,self.box)
-                    self.xyzgrid[:,0] -= self.xyzgrid[0,0]
-                    self.xyzgrid[:,1] -= self.xyzgrid[0,1]
+                    xygrid = build.build_xygrid(self.nproteins+self.nrnas,self.box)
+                    self.xyzgrid = np.zeros((len(xygrid),3))
+                    self.xyzgrid[:,:2] = xygrid[:,:2]
+                    self.xyzgrid[:,2] = self.box[2] * 0.5
                 else:
                     xyzgrid = build.build_xyzgrid(np.ceil((self.nproteins+self.nrnas)/2.),[self.box[0],self.box[1],self.box[2]/2.-self.slab_outer])
                     self.xyzgrid = np.append(xyzgrid, xyzgrid + np.asarray([0,0,self.box[2]/2.+self.slab_outer]), axis=0)
@@ -415,15 +416,16 @@ class Sim:
             xs = x0 + comp.xinit
         elif self.topol == 'shift_ref_bead':
             x0 = self.xyzgrid[self.grid_counter]
-            xs = x0 + comp.xinit
             if comp.ref_bead < 0:
+                xs = x0 + comp.xinit
                 dz = x0[2] - 0.5 * self.box[2]
                 if np.abs(dz) < 10:
                     direction = 1 if dz < 0 else -1
                     xs -= comp.xinit[0] + direction * np.asarray(comp.pos_bead, dtype=float)
             else:
-                xs -= comp.xinit[comp.ref_bead] + np.asarray(comp.pos_bead, dtype=float)
-                xs[:,2] += self.box[2] * 0.5 - x0[2]
+                xs = comp.xinit - comp.xinit[comp.ref_bead]
+                xs -= np.asarray(comp.pos_bead,dtype=float)
+                xs += x0
             self.grid_counter += 1
         else:
             box = self.box if comp.subvolume is None else np.asarray(comp.subvolume)
@@ -827,9 +829,9 @@ class Sim:
         simulation.reporters.append(app.dcdreporter.DCDReporter(f'{self.path}/{self.sysname:s}.dcd',self.wfreq,append=append))
         simulation.reporters.append(app.statedatareporter.StateDataReporter(f'{self.path}/{self.sysname}.log',self.logfreq,
                 step=True,speed=True,elapsedTime=True,potentialEnergy=self.report_potential_energy,separator='\t',append=append))
-        #if self.nlipids > 0 and self.report_potential_energy:
-            #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ah_pp.log', self.logfreq, group=0, append=append))
-             #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_yu_pp.log', self.logfreq, group=1, append=append))
+        if self.report_potential_energy:
+            simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ah_pp.log', self.logfreq, group=0, append=append))
+            simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_yu_pp.log', self.logfreq, group=1, append=append))
             #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_ll.log', self.logfreq, group=2, append=append))
             #simulation.reporters.append(ForceGroupReporter(f'{self.path}/{self.sysname}_pl.log', self.logfreq, group=3, append=append))
 
