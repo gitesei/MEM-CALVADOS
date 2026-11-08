@@ -11,7 +11,7 @@ except FileNotFoundError:
 
 setup(
     name='mem-calvados',
-    version='1.0.0',
+    version='2.0.0',
     description='Coarse-grained implicit-solvent simulations of biomolecules',
     url='https://github.com/KULL-Centre/CALVADOS',
     authors=[
