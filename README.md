@@ -16,6 +16,7 @@ Examples of how to run simulations of single transmembrane proteins can be found
 
 - `examples/single_TMP` contains scripts and input required to run a simulation of GHR where the protein is modeled using CALVADOS 3
 - `examples/single_TMP_AF` contains scripts and input required to run a simulation of VDAC1 where the protein is modeled using AF-CALVADOS
+- `examples/TMP_MDP_IDR` contains scripts and input required to run a simulation of T-Cell signaling proteins (LAT, Grb2, Sos1)
 
 The general architecture of the CALVADOS package and other illustrative examples are described in:
 
